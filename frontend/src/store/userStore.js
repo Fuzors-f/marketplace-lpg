@@ -76,9 +76,9 @@ const useUserStore = create(
       },
 
       // Change password
-      changePassword: async (currentPassword, newPassword) => {
+      changePassword: async (passwordData) => {
         try {
-          await axios.put('/auth/password', { currentPassword, newPassword });
+          await axios.put('/auth/password', passwordData);
           
           return { success: true };
         } catch (error) {

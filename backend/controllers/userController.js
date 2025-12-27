@@ -155,7 +155,7 @@ export const createUser = async (req, res) => {
 // @access  Private (Admin only)
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, phone, address, role, status, profilePicture } = req.body;
+    const { name, email, phone, address, role, status, profilePicture, password } = req.body;
 
     const user = await User.findById(req.params.id);
 
@@ -207,6 +207,18 @@ export const updateUser = async (req, res) => {
     if (role) user.role = role;
     if (status) user.status = status;
     if (profilePicture !== undefined) user.profilePicture = profilePicture;
+    
+    // Handle password update (Admin can change user password)
+    if (password) {
+      // Validate password length
+      if (password.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 8 characters'
+        });
+      }
+      user.password = password; // Will be hashed by pre-save hook
+    }
 
     await user.save();
 

@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Items from './pages/Items';
 import Stock from './pages/Stock';
+import StockDetail from './pages/StockDetail';
 import Catalog from './pages/Catalog';
 import PaymentMethods from './pages/PaymentMethods';
 import Transactions from './pages/Transactions';
@@ -16,6 +17,7 @@ import PaymentDetail from './pages/PaymentDetail';
 import Users from './pages/Users';
 import UserForm from './pages/UserForm';
 import Settings from './pages/Settings';
+import Reports from './pages/Reports';
 import Home from './pages/Home';
 import Register from './pages/user/Register';
 import UserLogin from './pages/user/UserLogin';
@@ -124,6 +126,16 @@ function App() {
         <Route path="/admin/settings" element={
           <PrivateRoute>
             <Settings />
+          </PrivateRoute>
+        } />
+        <Route path="/admin/reports" element={
+          <PrivateRoute>
+            <Reports />
+          </PrivateRoute>
+        } />
+        <Route path="/admin/stock/:itemId" element={
+          <PrivateRoute>
+            <StockDetail />
           </PrivateRoute>
         } />
 

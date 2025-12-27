@@ -32,8 +32,7 @@ const transactionSchema = new mongoose.Schema({
   invoiceNumber: {
     type: String,
     required: [true, 'Invoice number is required'],
-    unique: true,
-    index: true
+    unique: true
   },
   items: {
     type: [transactionItemSchema],
@@ -55,8 +54,7 @@ const transactionSchema = new mongoose.Schema({
       values: ['PENDING', 'UNPAID', 'PAID'],
       message: 'Status must be PENDING, UNPAID, or PAID'
     },
-    default: 'UNPAID',
-    index: true
+    default: 'UNPAID'
   },
   paymentMethodId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -70,8 +68,7 @@ const transactionSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   updatedAt: {
     type: Date,
@@ -79,7 +76,7 @@ const transactionSchema = new mongoose.Schema({
   }
 });
 
-// Compound indexes for efficient filtering
+// Compound indexes for efficient filtering (only define once)
 transactionSchema.index({ userId: 1, status: 1 });
 transactionSchema.index({ userId: 1, createdAt: -1 });
 transactionSchema.index({ status: 1, createdAt: -1 });

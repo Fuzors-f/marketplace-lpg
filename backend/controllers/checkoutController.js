@@ -3,22 +3,31 @@ import Order from '../models/Order.js';
 import Item from '../models/Item.js';
 import Stock from '../models/Stock.js';
 import PaymentMethod from '../models/PaymentMethod.js';
-import mongoose from 'mongoose';
+import StockHistory from '../models/StockHistory.js';
+
+// Helper function to calculate current stock for an item
+const calculateCurrentStock = async (itemId) => {
+  const stocks = await Stock.find({ itemId });
+  let currentStock = 0;
+  stocks.forEach(stock => {
+    if (stock.type === 'IN') {
+      currentStock += stock.quantity;
+    } else {
+      currentStock -= stock.quantity;
+    }
+  });
+  return currentStock;
+};
 
 // @desc    Checkout cart and create order
 // @route   POST /api/checkout
 // @access  Private (User)
 export const checkout = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { paymentMethodId, shippingAddress, notes } = req.body;
 
     // Validate input
     if (!paymentMethodId || !shippingAddress) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Please provide payment method and shipping address'
@@ -28,8 +37,6 @@ export const checkout = async (req, res) => {
     // Check if payment method exists
     const paymentMethod = await PaymentMethod.findById(paymentMethodId);
     if (!paymentMethod) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Payment method not found'
@@ -38,58 +45,73 @@ export const checkout = async (req, res) => {
 
     // Get user's cart
     const cart = await Cart.findOne({ userId: req.user.id })
-      .populate('items.itemId')
-      .session(session);
+      .populate('items.itemId', 'name size price image description');
 
     if (!cart || cart.items.length === 0) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: 'Cart is empty'
       });
     }
 
+    // Debug: Log cart items
+    console.log('Cart items:', JSON.stringify(cart.items, null, 2));
+
     // Validate stock availability and calculate total
     let total = 0;
     const orderItems = [];
+    const stockUpdates = []; // Track stock updates for history
 
     for (const cartItem of cart.items) {
       const item = cartItem.itemId;
       
-      if (!item) {
-        await session.abortTransaction();
-        session.endSession();
+      // Debug: Log each item
+      console.log('Processing item:', item);
+      
+      if (!item || !item._id) {
         return res.status(404).json({
           success: false,
-          message: 'One or more items not found'
+          message: 'One or more items not found or have been removed'
         });
       }
 
-      // Check stock
-      const stock = await Stock.findOne({ itemId: item._id }).session(session);
+      // Ensure price is valid - fetch directly from Item if needed
+      let itemPrice = Number(item.price);
       
-      if (!stock) {
-        await session.abortTransaction();
-        session.endSession();
+      // If price is still invalid, try to fetch item directly
+      if (!itemPrice || itemPrice <= 0) {
+        console.log('Price invalid, fetching item directly:', item._id);
+        const freshItem = await Item.findById(item._id);
+        if (freshItem) {
+          itemPrice = Number(freshItem.price) || 0;
+          console.log('Fresh item price:', itemPrice);
+        }
+      }
+      
+      if (!itemPrice || itemPrice <= 0) {
         return res.status(400).json({
           success: false,
-          message: `Stock not found for ${item.name}`
+          message: `Invalid price for ${item.name || 'Unknown item'}`
         });
       }
 
-      if (stock.qty < cartItem.qty) {
-        await session.abortTransaction();
-        session.endSession();
+      // Calculate current stock from all stock entries
+      const currentStock = await calculateCurrentStock(item._id);
+
+      if (currentStock < cartItem.qty) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for ${item.name}. Available: ${stock.qty}, Requested: ${cartItem.qty}`
+          message: `Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${cartItem.qty}`
         });
       }
 
-      // Reduce stock
-      stock.qty -= cartItem.qty;
-      await stock.save({ session });
+      // Track for stock update
+      stockUpdates.push({
+        itemId: item._id,
+        previousStock: currentStock,
+        newStock: currentStock - cartItem.qty,
+        quantity: cartItem.qty
+      });
 
       // Prepare order item
       orderItems.push({
@@ -97,14 +119,14 @@ export const checkout = async (req, res) => {
         name: item.name,
         size: item.size,
         quantity: cartItem.qty,
-        priceAtPurchase: item.price
+        priceAtPurchase: itemPrice
       });
 
-      total += item.price * cartItem.qty;
+      total += itemPrice * cartItem.qty;
     }
 
     // Create order
-    const order = await Order.create([{
+    const order = await Order.create({
       userId: req.user.id,
       items: orderItems,
       paymentMethodId,
@@ -112,17 +134,43 @@ export const checkout = async (req, res) => {
       status: 'pending',
       shippingAddress,
       notes: notes || ''
-    }], { session });
+    });
+
+    // Create stock OUT entries and stock history records
+    for (const update of stockUpdates) {
+      // Create Stock OUT entry (this is how stock is reduced)
+      await Stock.create({
+        itemId: update.itemId,
+        quantity: update.quantity,
+        type: 'OUT',
+        note: `Order #${order._id}`
+      });
+
+      // Create StockHistory record for tracking
+      await StockHistory.create({
+        itemId: update.itemId,
+        type: 'OUT',
+        quantity: update.quantity,
+        reason: 'sold',
+        note: `Order #${order._id}`,
+        previousStock: update.previousStock,
+        newStock: update.newStock,
+        performedBy: {
+          userId: req.user.id,
+          userType: 'User',
+          name: req.user.name || 'User'
+        },
+        referenceId: String(order._id),
+        referenceType: 'order'
+      });
+    }
 
     // Clear cart
     cart.items = [];
-    await cart.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
+    await cart.save();
 
     // Populate order details
-    const populatedOrder = await Order.findById(order[0]._id)
+    const populatedOrder = await Order.findById(order._id)
       .populate('items.itemId', 'name size price image')
       .populate('paymentMethodId', 'name accountNumber accountName')
       .populate('userId', 'name email phone');
@@ -133,8 +181,6 @@ export const checkout = async (req, res) => {
       data: populatedOrder
     });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     console.error(error);
     res.status(500).json({
       success: false,
@@ -221,18 +267,13 @@ export const getOrder = async (req, res) => {
 // @route   PUT /api/checkout/orders/:id/cancel
 // @access  Private (User)
 export const cancelOrder = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const order = await Order.findOne({
       _id: req.params.id,
       userId: req.user.id
-    }).session(session);
+    });
 
     if (!order) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(404).json({
         success: false,
         message: 'Order not found'
@@ -241,30 +282,48 @@ export const cancelOrder = async (req, res) => {
 
     // Can only cancel pending orders
     if (order.status !== 'pending') {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({
         success: false,
         message: `Cannot cancel order with status: ${order.status}`
       });
     }
 
-    // Restore stock
+    // Restore stock and create stock history
     for (const item of order.items) {
-      const stock = await Stock.findOne({ itemId: item.itemId }).session(session);
-      
-      if (stock) {
-        stock.qty += item.quantity;
-        await stock.save({ session });
-      }
+      // Calculate current stock
+      const currentStock = await calculateCurrentStock(item.itemId);
+      const newStock = currentStock + item.quantity;
+
+      // Create Stock IN entry to restore stock
+      await Stock.create({
+        itemId: item.itemId,
+        quantity: item.quantity,
+        type: 'IN',
+        note: `Order cancelled #${order._id}`
+      });
+
+      // Create stock history record
+      await StockHistory.create({
+        itemId: item.itemId,
+        type: 'IN',
+        quantity: item.quantity,
+        reason: 'return',
+        note: `Order cancelled #${order._id}`,
+        previousStock: currentStock,
+        newStock: newStock,
+        performedBy: {
+          userId: req.user.id,
+          userType: 'User',
+          name: req.user.name || 'User'
+        },
+        referenceId: String(order._id),
+        referenceType: 'order'
+      });
     }
 
     // Update order status
     order.status = 'cancelled';
-    await order.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
+    await order.save();
 
     // Populate and return
     const populatedOrder = await Order.findById(order._id)
@@ -277,8 +336,6 @@ export const cancelOrder = async (req, res) => {
       data: populatedOrder
     });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     console.error(error);
     res.status(500).json({
       success: false,

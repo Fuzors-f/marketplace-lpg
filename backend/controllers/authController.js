@@ -421,3 +421,26 @@ export const getCurrentUser = async (req, res) => {
     });
   }
 };
+
+// @desc    Get all users for dropdown (admin use)
+// @route   GET /api/auth/users
+// @access  Private (Admin only)
+export const getAllUsersForDropdown = async (req, res) => {
+  try {
+    const users = await User.find({ status: 'active' })
+      .select('_id name email phone')
+      .sort({ name: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};

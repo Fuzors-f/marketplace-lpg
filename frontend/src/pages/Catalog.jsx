@@ -31,12 +31,21 @@ const Catalog = () => {
 
   const handleAddToCatalog = async (e) => {
     e.preventDefault();
+    
+    if (!selectedItemId) {
+      alert('Please select an item');
+      return;
+    }
+    
     try {
-      await api.post('/catalog', { itemId: selectedItemId, isListed: true });
-      setShowModal(false);
-      setSelectedItemId('');
-      fetchData();
+      const response = await api.post('/catalog', { itemId: selectedItemId, isListed: true });
+      if (response.data.success) {
+        setShowModal(false);
+        setSelectedItemId('');
+        fetchData();
+      }
     } catch (error) {
+      console.error('Add to catalog error:', error);
       alert(error.response?.data?.message || 'Failed to add item to catalog');
     }
   };

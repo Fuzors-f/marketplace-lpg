@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import useStockStore from '../store/stockStore';
 import useItemStore from '../store/itemStore';
 
 const Stock = () => {
+  const navigate = useNavigate();
   const { summary, fetchStockSummary, addStock, loading } = useStockStore();
   const { items, fetchItems } = useItemStore();
   const [showModal, setShowModal] = useState(false);
@@ -77,6 +79,7 @@ const Stock = () => {
                     <th className="px-6 py-4 text-left">Size</th>
                     <th className="px-6 py-4 text-center">Current Stock</th>
                     <th className="px-6 py-4 text-center">Status</th>
+                    <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,6 +106,14 @@ const Stock = () => {
                         ) : (
                           <span className="text-green-600 font-semibold">Good</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => navigate(`/admin/stock/${item.itemId}`)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                          View History
+                        </button>
                       </td>
                     </tr>
                   ))}

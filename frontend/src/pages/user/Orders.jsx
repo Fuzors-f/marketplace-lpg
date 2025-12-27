@@ -76,11 +76,12 @@ function Orders() {
   };
 
   const formatPrice = (price) => {
+    const numPrice = Number(price) || 0;
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0
-    }).format(price);
+    }).format(numPrice);
   };
 
   const formatDate = (date) => {
@@ -245,7 +246,7 @@ function Orders() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500">Total Amount</p>
-                      <p className="text-xl font-bold text-blue-600">{formatPrice(order.totalAmount)}</p>
+                      <p className="text-xl font-bold text-blue-600">{formatPrice(order.total)}</p>
                     </div>
                   </div>
                 </div>

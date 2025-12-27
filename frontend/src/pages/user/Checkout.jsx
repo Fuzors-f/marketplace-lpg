@@ -40,8 +40,8 @@ function Checkout() {
 
   const fetchPaymentMethods = async () => {
     try {
-      const response = await axios.get('/payment-methods');
-      const activeMethods = response.data.data.filter(pm => pm.isActive);
+      const response = await axios.get('/payment-methods?active=true');
+      const activeMethods = response.data.data.filter(pm => pm.active);
       setPaymentMethods(activeMethods);
       
       if (activeMethods.length > 0) {

@@ -5,9 +5,10 @@ import {
   login, 
   getCurrentUser,
   updateProfile,
-  changePassword
+  changePassword,
+  getAllUsersForDropdown
 } from '../controllers/authController.js';
-import { protect } from '../middleware/auth.js';
+import { protect, adminOnly } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -20,5 +21,8 @@ router.post('/login', login);
 router.get('/me', protect, getCurrentUser);
 router.put('/profile', protect, updateProfile);
 router.put('/password', protect, changePassword);
+
+// Get all users for dropdown (admin only)
+router.get('/users', protect, adminOnly, getAllUsersForDropdown);
 
 export default router;

@@ -116,6 +116,14 @@ const Layout = ({ children }) => {
               Users
             </Link>
             <Link
+              to="/admin/reports"
+              className={`px-6 py-4 hover:bg-gray-700 transition ${
+                isActive('/admin/reports') ? 'bg-gray-700 border-b-4 border-green-500' : ''
+              }`}
+            >
+              Reports
+            </Link>
+            <Link
               to="/admin/settings"
               className={`px-6 py-4 hover:bg-gray-700 transition ${
                 isActive('/admin/settings') ? 'bg-gray-700 border-b-4 border-green-500' : ''

@@ -9,8 +9,7 @@ const paymentSchema = new mongoose.Schema({
   receiptNumber: {
     type: String,
     required: [true, 'Receipt number is required'],
-    unique: true,
-    index: true
+    unique: true
   },
   transactionIds: {
     type: [{
@@ -36,14 +35,12 @@ const paymentSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   }
 });
 
-// Compound indexes for efficient querying
+// Compound indexes for efficient querying (avoiding duplicates)
 paymentSchema.index({ userId: 1, createdAt: -1 });
-paymentSchema.index({ receiptNumber: 1 });
 
 // Virtual for populated user data
 paymentSchema.virtual('user', {
