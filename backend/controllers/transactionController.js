@@ -165,7 +165,18 @@ export const getAllTransactions = async (req, res) => {
     }
 
     if (status) {
-      query.status = status.toLowerCase();
+      // Map transaction status (PAID/UNPAID/PENDING) to order status
+      const statusUpper = status.toUpperCase();
+      if (statusUpper === 'PAID') {
+        query.status = { $in: ['confirmed', 'processing', 'shipped', 'delivered'] };
+      } else if (statusUpper === 'UNPAID' || statusUpper === 'PENDING') {
+        query.status = 'pending';
+      } else if (statusUpper === 'CANCELLED') {
+        query.status = 'cancelled';
+      } else {
+        // Direct status match for order statuses
+        query.status = status.toLowerCase();
+      }
     }
 
     if (paymentMethodId) {
@@ -442,9 +453,12 @@ export const deleteTransaction = async (req, res) => {
 // @access  Private (Admin only)
 export const bulkPayTransactions = async (req, res) => {
   try {
-    const { orderIds, status = 'delivered' } = req.body;
+    const { orderIds, transactionIds, status = 'delivered' } = req.body;
+    
+    // Support both orderIds and transactionIds for compatibility
+    const ids = orderIds || transactionIds;
 
-    if (!orderIds || orderIds.length === 0) {
+    if (!ids || ids.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Please provide order IDs'
