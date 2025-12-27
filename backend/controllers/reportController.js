@@ -1,4 +1,4 @@
-import Transaction from '../models/Transaction.js';
+import Order from '../models/Order.js';
 import Item from '../models/Item.js';
 
 // @desc    Get best selling items report
@@ -9,42 +9,36 @@ export const getBestSellers = async (req, res) => {
     const { startDate, endDate, limit = 10 } = req.query;
 
     // Build date filter
-    const dateFilter = {};
+    const dateFilter = {
+      status: { $nin: ['cancelled'] } // Exclude cancelled orders
+    };
+    
     if (startDate || endDate) {
       dateFilter.createdAt = {};
       if (startDate) {
         dateFilter.createdAt.$gte = new Date(startDate);
       }
       if (endDate) {
-        dateFilter.createdAt.$lte = new Date(endDate);
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        dateFilter.createdAt.$lte = endDateTime;
       }
     }
 
-    // Aggregate to get best selling items
-    const bestSellers = await Transaction.aggregate([
-      // Filter by date and paid status
-      { 
-        $match: { 
-          status: 'PAID',
-          ...dateFilter 
-        } 
-      },
-      // Unwind items array
+    // Aggregate from Order
+    const bestSellers = await Order.aggregate([
+      { $match: dateFilter },
       { $unwind: '$items' },
-      // Group by itemId and sum quantities
       {
         $group: {
           _id: '$items.itemId',
-          totalQuantitySold: { $sum: '$items.qty' },
-          totalRevenue: { $sum: '$items.subtotal' },
+          totalQuantitySold: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$items.quantity', '$items.priceAtPurchase'] } },
           transactionCount: { $sum: 1 }
         }
       },
-      // Sort by quantity sold descending
       { $sort: { totalQuantitySold: -1 } },
-      // Limit results
       { $limit: parseInt(limit) },
-      // Lookup item details
       {
         $lookup: {
           from: 'items',
@@ -53,16 +47,14 @@ export const getBestSellers = async (req, res) => {
           as: 'itemDetails'
         }
       },
-      // Unwind item details
-      { $unwind: '$itemDetails' },
-      // Project final shape
+      { $unwind: { path: '$itemDetails', preserveNullAndEmptyArrays: true } },
       {
         $project: {
           _id: 1,
           itemId: '$_id',
-          name: '$itemDetails.name',
-          size: '$itemDetails.size',
-          price: '$itemDetails.price',
+          name: { $ifNull: ['$itemDetails.name', 'Unknown'] },
+          size: { $ifNull: ['$itemDetails.size', ''] },
+          price: { $ifNull: ['$itemDetails.price', 0] },
           totalQuantitySold: 1,
           totalRevenue: 1,
           transactionCount: 1
@@ -92,7 +84,10 @@ export const getSalesReport = async (req, res) => {
     const { startDate, endDate, groupBy = 'day' } = req.query;
 
     // Build date filter
-    const dateFilter = { status: 'PAID' };
+    const dateFilter = {
+      status: { $nin: ['cancelled'] }
+    };
+    
     if (startDate || endDate) {
       dateFilter.createdAt = {};
       if (startDate) {
@@ -119,15 +114,15 @@ export const getSalesReport = async (req, res) => {
         dateFormat = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
     }
 
-    // Aggregate sales by date
-    const salesData = await Transaction.aggregate([
+    // Aggregate from Order
+    const salesData = await Order.aggregate([
       { $match: dateFilter },
       {
         $group: {
           _id: dateFormat,
-          totalSales: { $sum: '$totalAmount' },
+          totalSales: { $sum: '$total' },
           transactionCount: { $sum: 1 },
-          itemsSold: { $sum: { $sum: '$items.qty' } }
+          itemsSold: { $sum: { $sum: '$items.quantity' } }
         }
       },
       { $sort: { _id: 1 } },
@@ -174,7 +169,10 @@ export const getRevenueByPaymentMethod = async (req, res) => {
     const { startDate, endDate } = req.query;
 
     // Build date filter
-    const dateFilter = { status: 'PAID' };
+    const dateFilter = {
+      status: { $nin: ['cancelled'] }
+    };
+    
     if (startDate || endDate) {
       dateFilter.createdAt = {};
       if (startDate) {
@@ -187,12 +185,12 @@ export const getRevenueByPaymentMethod = async (req, res) => {
       }
     }
 
-    const revenueByPayment = await Transaction.aggregate([
+    const revenueByPayment = await Order.aggregate([
       { $match: dateFilter },
       {
         $group: {
           _id: '$paymentMethodId',
-          totalRevenue: { $sum: '$totalAmount' },
+          totalRevenue: { $sum: '$total' },
           transactionCount: { $sum: 1 }
         }
       },

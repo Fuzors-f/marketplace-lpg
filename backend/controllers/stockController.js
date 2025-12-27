@@ -181,9 +181,8 @@ export const getStockSummary = async (req, res) => {
 // @access  Private (Admin only)
 export const getDashboardStats = async (req, res) => {
   try {
-    const Transaction = (await import('../models/Transaction.js')).default;
+    const Order = (await import('../models/Order.js')).default;
     const User = (await import('../models/User.js')).default;
-    const Payment = (await import('../models/Payment.js')).default;
 
     // Get items statistics
     const items = await Item.find();
@@ -211,39 +210,41 @@ export const getDashboardStats = async (req, res) => {
     const totalUsers = await User.countDocuments();
     const activeUsers = await User.countDocuments({ status: 'active' });
 
-    // Get transaction statistics
-    const totalTransactions = await Transaction.countDocuments();
-    const paidTransactions = await Transaction.countDocuments({ status: 'PAID' });
-    const unpaidTransactions = await Transaction.countDocuments({ status: 'UNPAID' });
-    const pendingTransactions = await Transaction.countDocuments({ status: 'PENDING' });
+    // Get order statistics
+    const totalOrders = await Order.countDocuments();
+    const pendingOrders = await Order.countDocuments({ status: 'pending' });
+    const confirmedOrders = await Order.countDocuments({ status: 'confirmed' });
+    const processingOrders = await Order.countDocuments({ status: 'processing' });
+    const shippedOrders = await Order.countDocuments({ status: 'shipped' });
+    const deliveredOrders = await Order.countDocuments({ status: 'delivered' });
+    const cancelledOrders = await Order.countDocuments({ status: 'cancelled' });
 
-    // Get revenue (total from PAID transactions)
-    const revenueResult = await Transaction.aggregate([
-      { $match: { status: 'PAID' } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    // Get revenue from non-cancelled orders
+    const revenueResult = await Order.aggregate([
+      { $match: { status: { $nin: ['cancelled'] } } },
+      { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
     const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
-
-    // Get total payments
-    const totalPayments = await Payment.countDocuments();
 
     // Get today's statistics
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayTransactions = await Transaction.countDocuments({
+    
+    const todayOrders = await Order.countDocuments({
       createdAt: { $gte: today }
     });
-    const todayRevenueResult = await Transaction.aggregate([
-      { $match: { status: 'PAID', createdAt: { $gte: today } } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+
+    const todayRevenueResult = await Order.aggregate([
+      { $match: { status: { $nin: ['cancelled'] }, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
     const todayRevenue = todayRevenueResult.length > 0 ? todayRevenueResult[0].total : 0;
 
     // Get this month's statistics
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthlyRevenueResult = await Transaction.aggregate([
-      { $match: { status: 'PAID', createdAt: { $gte: firstDayOfMonth } } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    const monthlyRevenueResult = await Order.aggregate([
+      { $match: { status: { $nin: ['cancelled'] }, createdAt: { $gte: firstDayOfMonth } } },
+      { $group: { _id: null, total: { $sum: '$total' } } }
     ]);
     const monthlyRevenue = monthlyRevenueResult.length > 0 ? monthlyRevenueResult[0].total : 0;
 
@@ -263,21 +264,27 @@ export const getDashboardStats = async (req, res) => {
           active: activeUsers
         },
         transactions: {
-          total: totalTransactions,
-          paid: paidTransactions,
-          unpaid: unpaidTransactions,
-          pending: pendingTransactions
+          total: totalOrders,
+          paid: deliveredOrders + confirmedOrders + processingOrders + shippedOrders,
+          unpaid: 0,
+          pending: pendingOrders
+        },
+        orders: {
+          total: totalOrders,
+          pending: pendingOrders,
+          confirmed: confirmedOrders,
+          processing: processingOrders,
+          shipped: shippedOrders,
+          delivered: deliveredOrders,
+          cancelled: cancelledOrders
         },
         revenue: {
           total: totalRevenue,
           today: todayRevenue,
           monthly: monthlyRevenue
         },
-        payments: {
-          total: totalPayments
-        },
         today: {
-          transactions: todayTransactions,
+          transactions: todayOrders,
           revenue: todayRevenue
         }
       }

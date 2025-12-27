@@ -1,10 +1,8 @@
-import Transaction from '../models/Transaction.js';
-import Payment from '../models/Payment.js';
+import Order from '../models/Order.js';
 import Stock from '../models/Stock.js';
 import Item from '../models/Item.js';
 import User from '../models/User.js';
 import PaymentMethod from '../models/PaymentMethod.js';
-import { generateInvoiceNumber, generateReceiptNumber } from '../utils/numberGenerator.js';
 
 // Helper function to get current stock for an item
 const getCurrentStock = async (itemId) => {
@@ -22,30 +20,37 @@ const getCurrentStock = async (itemId) => {
   return currentStock;
 };
 
-// Helper function to reduce stock when transaction is created
-const reduceStock = async (items, transactionId) => {
+// Helper function to reduce stock when order is created
+const reduceStock = async (items, orderId) => {
   for (const item of items) {
     await Stock.create({
       itemId: item.itemId,
-      quantity: item.qty,
+      quantity: item.quantity,
       type: 'OUT',
-      note: `Transaction: ${transactionId}`
+      note: `Order: ${orderId}`
     });
   }
 };
 
-// @desc    Create manual transaction (Admin creates on behalf of user)
+// @desc    Create order (Admin creates on behalf of user)
 // @route   POST /api/admin/transactions
 // @access  Private (Admin only)
 export const createTransaction = async (req, res) => {
   try {
-    const { userId, items, status = 'UNPAID' } = req.body;
+    const { userId, items, status = 'pending', paymentMethodId, shippingAddress, notes } = req.body;
 
     // Validation
     if (!userId || !items || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Please provide userId and at least one item'
+      });
+    }
+
+    if (!paymentMethodId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide payment method'
       });
     }
 
@@ -59,7 +64,7 @@ export const createTransaction = async (req, res) => {
     }
 
     // Validate items and calculate totals
-    let totalAmount = 0;
+    let total = 0;
     const processedItems = [];
 
     for (const item of items) {
@@ -94,40 +99,41 @@ export const createTransaction = async (req, res) => {
 
       processedItems.push({
         itemId: item.itemId,
-        qty: item.qty,
-        price,
-        subtotal
+        name: itemData.name,
+        size: itemData.size,
+        quantity: item.qty,
+        priceAtPurchase: price
       });
 
-      totalAmount += subtotal;
+      total += subtotal;
     }
 
-    // Generate unique invoice number
-    const invoiceNumber = await generateInvoiceNumber();
-
-    // Create transaction
-    const transaction = await Transaction.create({
+    // Create order
+    const order = await Order.create({
       userId,
-      invoiceNumber,
       items: processedItems,
-      totalAmount,
-      status
+      paymentMethodId,
+      total,
+      status,
+      shippingAddress: shippingAddress || user.address || 'Not specified',
+      notes: notes || ''
     });
 
     // Reduce stock
-    await reduceStock(processedItems, transaction._id);
+    await reduceStock(processedItems, order._id);
 
     // Populate and return
-    const populatedTransaction = await Transaction.findById(transaction._id)
+    const populatedOrder = await Order.findById(order._id)
       .populate('userId', 'name email phone')
-      .populate('items.itemId', 'name size');
+      .populate('items.itemId', 'name size')
+      .populate('paymentMethodId', 'name');
 
     res.status(201).json({
       success: true,
-      data: populatedTransaction
+      data: populatedOrder
     });
   } catch (error) {
-    console.error('Create transaction error:', error);
+    console.error('Create order error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -135,7 +141,7 @@ export const createTransaction = async (req, res) => {
   }
 };
 
-// @desc    Get all transactions with filters
+// @desc    Get all orders with filters
 // @route   GET /api/admin/transactions
 // @access  Private (Admin only)
 export const getAllTransactions = async (req, res) => {
@@ -159,7 +165,7 @@ export const getAllTransactions = async (req, res) => {
     }
 
     if (status) {
-      query.status = status.toUpperCase();
+      query.status = status.toLowerCase();
     }
 
     if (paymentMethodId) {
@@ -172,19 +178,24 @@ export const getAllTransactions = async (req, res) => {
         query.createdAt.$gte = new Date(startDate);
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDateTime;
       }
     }
 
     if (search) {
-      query.invoiceNumber = { $regex: search, $options: 'i' };
+      query.$or = [
+        { _id: { $regex: search, $options: 'i' } },
+        { notes: { $regex: search, $options: 'i' } }
+      ];
     }
 
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Execute query
-    const transactions = await Transaction.find(query)
+    const orders = await Order.find(query)
       .populate('userId', 'name email phone')
       .populate('items.itemId', 'name size')
       .populate('paymentMethodId', 'name')
@@ -192,8 +203,30 @@ export const getAllTransactions = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Transform to match expected format
+    const transactions = orders.map(order => ({
+      _id: order._id,
+      invoiceNumber: `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
+      userId: order.userId,
+      items: order.items.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        size: item.size,
+        qty: item.quantity,
+        price: item.priceAtPurchase,
+        subtotal: item.quantity * item.priceAtPurchase
+      })),
+      totalAmount: order.total,
+      status: order.status.toUpperCase(),
+      paymentMethodId: order.paymentMethodId,
+      shippingAddress: order.shippingAddress,
+      notes: order.notes,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt
+    }));
+
     // Get total count
-    const total = await Transaction.countDocuments(query);
+    const total = await Order.countDocuments(query);
 
     res.status(200).json({
       success: true,
@@ -204,7 +237,7 @@ export const getAllTransactions = async (req, res) => {
       data: transactions
     });
   } catch (error) {
-    console.error('Get transactions error:', error);
+    console.error('Get orders error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -212,30 +245,51 @@ export const getAllTransactions = async (req, res) => {
   }
 };
 
-// @desc    Get single transaction by ID
+// @desc    Get single order by ID
 // @route   GET /api/admin/transactions/:id
 // @access  Private (Admin only)
 export const getTransactionById = async (req, res) => {
   try {
-    const transaction = await Transaction.findById(req.params.id)
+    const order = await Order.findById(req.params.id)
       .populate('userId', 'name email phone address')
       .populate('items.itemId', 'name size description')
-      .populate('paymentMethodId', 'name type')
-      .populate('paymentId');
+      .populate('paymentMethodId', 'name type');
 
-    if (!transaction) {
+    if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Order not found'
       });
     }
+
+    // Transform to match expected format
+    const transaction = {
+      _id: order._id,
+      invoiceNumber: `ORD-${order._id.toString().slice(-8).toUpperCase()}`,
+      userId: order.userId,
+      items: order.items.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        size: item.size,
+        qty: item.quantity,
+        price: item.priceAtPurchase,
+        subtotal: item.quantity * item.priceAtPurchase
+      })),
+      totalAmount: order.total,
+      status: order.status.toUpperCase(),
+      paymentMethodId: order.paymentMethodId,
+      shippingAddress: order.shippingAddress,
+      notes: order.notes,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt
+    };
 
     res.status(200).json({
       success: true,
       data: transaction
     });
   } catch (error) {
-    console.error('Get transaction error:', error);
+    console.error('Get order error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -243,111 +297,90 @@ export const getTransactionById = async (req, res) => {
   }
 };
 
-// @desc    Update transaction (only if unpaid)
+// @desc    Update order status
 // @route   PUT /api/admin/transactions/:id
 // @access  Private (Admin only)
 export const updateTransaction = async (req, res) => {
   try {
-    const { items, status } = req.body;
+    const { status, notes } = req.body;
 
-    // Find transaction
-    const transaction = await Transaction.findById(req.params.id);
+    // Find order
+    const order = await Order.findById(req.params.id);
     
-    if (!transaction) {
+    if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Order not found'
       });
-    }
-
-    // Only allow updates for unpaid transactions
-    if (transaction.status === 'PAID') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot update paid transactions'
-      });
-    }
-
-    // If updating items, need to revert old stock and validate new stock
-    if (items && items.length > 0) {
-      // Revert old stock
-      for (const oldItem of transaction.items) {
-        await Stock.create({
-          itemId: oldItem.itemId,
-          quantity: oldItem.qty,
-          type: 'IN',
-          note: `Transaction update revert: ${transaction._id}`
-        });
-      }
-
-      // Validate new items and calculate totals
-      let totalAmount = 0;
-      const processedItems = [];
-
-      for (const item of items) {
-        if (!item.itemId || !item.qty || item.qty < 1) {
-          return res.status(400).json({
-            success: false,
-            message: 'Each item must have itemId and qty (minimum 1)'
-          });
-        }
-
-        const itemData = await Item.findById(item.itemId);
-        if (!itemData) {
-          return res.status(404).json({
-            success: false,
-            message: `Item with ID ${item.itemId} not found`
-          });
-        }
-
-        // Check stock availability
-        const currentStock = await getCurrentStock(item.itemId);
-        if (currentStock < item.qty) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for item ${itemData.name}. Available: ${currentStock}, Requested: ${item.qty}`
-          });
-        }
-
-        const price = itemData.price;
-        const subtotal = price * item.qty;
-
-        processedItems.push({
-          itemId: item.itemId,
-          qty: item.qty,
-          price,
-          subtotal
-        });
-
-        totalAmount += subtotal;
-      }
-
-      // Update transaction
-      transaction.items = processedItems;
-      transaction.totalAmount = totalAmount;
-
-      // Reduce new stock
-      await reduceStock(processedItems, transaction._id);
     }
 
     // Update status if provided
     if (status) {
-      transaction.status = status.toUpperCase();
+      const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
+      const normalizedStatus = status.toLowerCase();
+      
+      if (!validStatuses.includes(normalizedStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status'
+        });
+      }
+
+      // If cancelling, restore stock
+      if (normalizedStatus === 'cancelled' && order.status !== 'cancelled') {
+        for (const item of order.items) {
+          await Stock.create({
+            itemId: item.itemId,
+            quantity: item.quantity,
+            type: 'IN',
+            note: `Order cancelled: ${order._id}`
+          });
+        }
+      }
+
+      order.status = normalizedStatus;
     }
 
-    await transaction.save();
+    if (notes !== undefined) {
+      order.notes = notes;
+    }
+
+    await order.save();
 
     // Populate and return
-    const updatedTransaction = await Transaction.findById(transaction._id)
+    const populatedOrder = await Order.findById(order._id)
       .populate('userId', 'name email phone')
-      .populate('items.itemId', 'name size');
+      .populate('items.itemId', 'name size')
+      .populate('paymentMethodId', 'name');
+
+    // Transform to match expected format
+    const transaction = {
+      _id: populatedOrder._id,
+      invoiceNumber: `ORD-${populatedOrder._id.toString().slice(-8).toUpperCase()}`,
+      userId: populatedOrder.userId,
+      items: populatedOrder.items.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        size: item.size,
+        qty: item.quantity,
+        price: item.priceAtPurchase,
+        subtotal: item.quantity * item.priceAtPurchase
+      })),
+      totalAmount: populatedOrder.total,
+      status: populatedOrder.status.toUpperCase(),
+      paymentMethodId: populatedOrder.paymentMethodId,
+      shippingAddress: populatedOrder.shippingAddress,
+      notes: populatedOrder.notes,
+      createdAt: populatedOrder.createdAt,
+      updatedAt: populatedOrder.updatedAt
+    };
 
     res.status(200).json({
       success: true,
-      data: updatedTransaction
+      data: transaction
     });
   } catch (error) {
-    console.error('Update transaction error:', error);
+    console.error('Update order error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -355,47 +388,48 @@ export const updateTransaction = async (req, res) => {
   }
 };
 
-// @desc    Delete transaction (only if unpaid)
+// @desc    Delete order (only if pending/cancelled)
 // @route   DELETE /api/admin/transactions/:id
 // @access  Private (Admin only)
 export const deleteTransaction = async (req, res) => {
   try {
-    const transaction = await Transaction.findById(req.params.id);
-    
-    if (!transaction) {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Order not found'
       });
     }
 
-    // Only allow deletion for unpaid transactions
-    if (transaction.status === 'PAID') {
+    // Only allow deletion of pending or cancelled orders
+    if (!['pending', 'cancelled'].includes(order.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete paid transactions'
+        message: 'Can only delete pending or cancelled orders'
       });
     }
 
-    // Revert stock
-    for (const item of transaction.items) {
-      await Stock.create({
-        itemId: item.itemId,
-        quantity: item.qty,
-        type: 'IN',
-        note: `Transaction deleted: ${transaction._id}`
-      });
+    // If pending (not cancelled), restore stock
+    if (order.status === 'pending') {
+      for (const item of order.items) {
+        await Stock.create({
+          itemId: item.itemId,
+          quantity: item.quantity,
+          type: 'IN',
+          note: `Order deleted: ${order._id}`
+        });
+      }
     }
 
-    // Delete transaction
-    await Transaction.findByIdAndDelete(req.params.id);
+    await Order.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
-      message: 'Transaction deleted successfully'
+      message: 'Order deleted successfully'
     });
   } catch (error) {
-    console.error('Delete transaction error:', error);
+    console.error('Delete order error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -403,106 +437,43 @@ export const deleteTransaction = async (req, res) => {
   }
 };
 
-// @desc    Bulk pay transactions
+// @desc    Bulk update order status (mark as delivered/paid)
 // @route   POST /api/admin/transactions/bulk-pay
 // @access  Private (Admin only)
 export const bulkPayTransactions = async (req, res) => {
   try {
-    const { userId, transactionIds, paymentMethodId } = req.body;
+    const { orderIds, status = 'delivered' } = req.body;
 
-    // Validation
-    if (!userId || !transactionIds || transactionIds.length === 0 || !paymentMethodId) {
+    if (!orderIds || orderIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide userId, transactionIds, and paymentMethodId'
+        message: 'Please provide order IDs'
       });
     }
 
-    // Validate user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Validate payment method exists
-    const paymentMethod = await PaymentMethod.findById(paymentMethodId);
-    if (!paymentMethod) {
-      return res.status(404).json({
-        success: false,
-        message: 'Payment method not found'
-      });
-    }
-
-    // Validate all transactions exist and belong to the user
-    const transactions = await Transaction.find({
-      _id: { $in: transactionIds },
-      userId
-    });
-
-    if (transactions.length !== transactionIds.length) {
+    const validStatuses = ['confirmed', 'processing', 'shipped', 'delivered'];
+    const normalizedStatus = status.toLowerCase();
+    
+    if (!validStatuses.includes(normalizedStatus)) {
       return res.status(400).json({
         success: false,
-        message: 'Some transactions not found or do not belong to the specified user'
+        message: 'Invalid status for bulk update'
       });
     }
 
-    // Check if all transactions are unpaid
-    const paidTransactions = transactions.filter(t => t.status === 'PAID');
-    if (paidTransactions.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot pay already paid transactions'
-      });
-    }
-
-    // Calculate total amount
-    const totalPaid = transactions.reduce((sum, t) => sum + t.totalAmount, 0);
-
-    // Generate receipt number
-    const receiptNumber = await generateReceiptNumber();
-
-    // Create payment record
-    const payment = await Payment.create({
-      userId,
-      receiptNumber,
-      transactionIds,
-      paymentMethodId,
-      totalPaid
-    });
-
-    // Update all transactions to PAID status
-    await Transaction.updateMany(
-      { _id: { $in: transactionIds } },
-      {
-        $set: {
-          status: 'PAID',
-          paymentId: payment._id,
-          paymentMethodId
-        }
-      }
+    // Update all orders
+    const result = await Order.updateMany(
+      { _id: { $in: orderIds }, status: { $nin: ['cancelled', 'delivered'] } },
+      { $set: { status: normalizedStatus, updatedAt: new Date() } }
     );
 
-    // Populate and return payment
-    const populatedPayment = await Payment.findById(payment._id)
-      .populate('userId', 'name email phone')
-      .populate('paymentMethodId', 'name type')
-      .populate({
-        path: 'transactionIds',
-        populate: {
-          path: 'items.itemId',
-          select: 'name size'
-        }
-      });
-
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      data: populatedPayment
+      message: `${result.modifiedCount} orders updated to ${normalizedStatus}`,
+      data: { modifiedCount: result.modifiedCount }
     });
   } catch (error) {
-    console.error('Bulk pay error:', error);
+    console.error('Bulk update error:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Server error'
@@ -510,7 +481,7 @@ export const bulkPayTransactions = async (req, res) => {
   }
 };
 
-// @desc    Get all payments
+// @desc    Get all payments (from orders with delivered status)
 // @route   GET /api/admin/payments
 // @access  Private (Admin only)
 export const getAllPayments = async (req, res) => {
@@ -519,13 +490,12 @@ export const getAllPayments = async (req, res) => {
       userId,
       startDate,
       endDate,
-      search,
       page = 1,
       limit = 10
     } = req.query;
 
-    // Build query
-    const query = {};
+    // Build query for delivered orders
+    const query = { status: 'delivered' };
 
     if (userId) {
       query.userId = userId;
@@ -537,28 +507,37 @@ export const getAllPayments = async (req, res) => {
         query.createdAt.$gte = new Date(startDate);
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate);
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDateTime;
       }
-    }
-
-    if (search) {
-      query.receiptNumber = { $regex: search, $options: 'i' };
     }
 
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     // Execute query
-    const payments = await Payment.find(query)
+    const orders = await Order.find(query)
       .populate('userId', 'name email phone')
       .populate('paymentMethodId', 'name type')
-      .populate('transactionIds', 'invoiceNumber totalAmount')
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Transform to payment format
+    const payments = orders.map(order => ({
+      _id: order._id,
+      receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
+      userId: order.userId,
+      orderId: order._id,
+      totalAmount: order.total,
+      paymentMethodId: order.paymentMethodId,
+      paidAt: order.updatedAt,
+      createdAt: order.createdAt
+    }));
+
     // Get total count
-    const total = await Payment.countDocuments(query);
+    const total = await Order.countDocuments(query);
 
     res.status(200).json({
       success: true,
@@ -582,23 +561,38 @@ export const getAllPayments = async (req, res) => {
 // @access  Private (Admin only)
 export const getPaymentById = async (req, res) => {
   try {
-    const payment = await Payment.findById(req.params.id)
+    const order = await Order.findOne({ _id: req.params.id, status: 'delivered' })
       .populate('userId', 'name email phone address')
-      .populate('paymentMethodId', 'name type')
-      .populate({
-        path: 'transactionIds',
-        populate: {
-          path: 'items.itemId',
-          select: 'name size price'
-        }
-      });
+      .populate('items.itemId', 'name size')
+      .populate('paymentMethodId', 'name type');
 
-    if (!payment) {
+    if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Payment not found'
       });
     }
+
+    // Transform to payment format
+    const payment = {
+      _id: order._id,
+      receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
+      userId: order.userId,
+      orderId: order._id,
+      items: order.items.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        size: item.size,
+        qty: item.quantity,
+        price: item.priceAtPurchase,
+        subtotal: item.quantity * item.priceAtPurchase
+      })),
+      totalAmount: order.total,
+      paymentMethodId: order.paymentMethodId,
+      shippingAddress: order.shippingAddress,
+      paidAt: order.updatedAt,
+      createdAt: order.createdAt
+    };
 
     res.status(200).json({
       success: true,

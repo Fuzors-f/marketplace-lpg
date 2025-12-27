@@ -258,13 +258,13 @@ function Orders() {
                     {order.items.map((item, index) => (
                       <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
                         <div>
-                          <p className="font-medium text-gray-900">{item.itemId.name}</p>
+                          <p className="font-medium text-gray-900">{item.name || item.itemId?.name}</p>
                           <p className="text-sm text-gray-600">
-                            Quantity: {item.quantity} x {formatPrice(item.price)}
+                            Quantity: {item.quantity} x {formatPrice(item.priceAtPurchase)}
                           </p>
                         </div>
                         <p className="font-semibold text-gray-900">
-                          {formatPrice(item.quantity * item.price)}
+                          {formatPrice(item.quantity * item.priceAtPurchase)}
                         </p>
                       </div>
                     ))}
