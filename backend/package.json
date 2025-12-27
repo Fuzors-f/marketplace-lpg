@@ -1,0 +1,39 @@
+{
+  "name": "lpg-marketplace-backend",
+  "version": "1.0.0",
+  "description": "Backend API for LPG Marketplace",
+  "main": "app.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon server.js",
+    "seed": "node scripts/seedAdmin.js",
+    "seed:admin": "node scripts/seedAdmin.js",
+    "seed:settings": "node scripts/seedSettings.js",
+    "seed:payments": "node scripts/seedPaymentMethods.js",
+    "seed:catalogs": "node scripts/seedCatalogs.js",
+    "seed:items": "node scripts/seedItems.js",
+    "seed:all": "node scripts/seedAll.js"
+  },
+  "keywords": ["lpg", "marketplace", "api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express-validator": "^7.0.1",
+    "multer": "^1.4.5-lts.1",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
