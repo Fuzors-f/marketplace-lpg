@@ -1,8 +1,21 @@
 import { create } from 'zustand';
 import api from '../api/axios';
 
+// Safe JSON parse helper
+const safeJSONParse = (str) => {
+  if (!str || str === 'undefined' || str === 'null') {
+    return null;
+  }
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    console.error('JSON parse error:', e);
+    return null;
+  }
+};
+
 const useAuthStore = create((set, get) => ({
-  admin: JSON.parse(localStorage.getItem('admin')) || null,
+  admin: safeJSONParse(localStorage.getItem('admin')),
   token: localStorage.getItem('token') || null,
   loading: false,
   error: null,
