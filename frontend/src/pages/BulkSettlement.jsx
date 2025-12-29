@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import useTransactionStore from '../store/transactionStore';
 import api from '../api/axios';
 
 const BulkSettlement = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     transactions,
     users, 
@@ -25,18 +26,52 @@ const BulkSettlement = () => {
   useEffect(() => {
     fetchUsers();
     fetchPaymentMethods();
+    
+    // Handle pre-selected data from navigation state
+    if (location.state?.preSelectedTransactions) {
+      setSelectedTransactions(location.state.preSelectedTransactions);
+    }
+    if (location.state?.preSelectedUserId) {
+      setSelectedUserId(location.state.preSelectedUserId);
+    }
+    if (location.state?.preSelectedPaymentMethodId) {
+      setPaymentMethodId(location.state.preSelectedPaymentMethodId);
+    }
   }, []);
 
   useEffect(() => {
     if (selectedUserId) {
-      fetchTransactions({ userId: selectedUserId, status: 'UNPAID' });
+      // Fetch transactions that can be paid - both UNPAID and completed orders
+      fetchTransactions({ userId: selectedUserId });
+      
+      // Auto-select default payment method if not already selected
+      if (!paymentMethodId && paymentMethods.length > 0) {
+        // Select first available payment method as default
+        setPaymentMethodId(paymentMethods[0]._id);
+      }
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, paymentMethods]);
 
   useEffect(() => {
-    setUnpaidTransactions(transactions.filter(t => t.status === 'UNPAID'));
-    setSelectedTransactions([]);
-  }, [transactions]);
+    // Filter transactions that can be paid (UNPAID or delivered status orders)
+    const payableTransactions = transactions.filter(t => 
+      t.status === 'UNPAID' || t.status === 'PENDING' ||
+      ['DELIVERED', 'CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(t.status)
+    );
+    setUnpaidTransactions(payableTransactions);
+    
+    // Keep pre-selected transactions if they exist and are still valid
+    if (location.state?.preSelectedTransactions) {
+      const validPreSelected = location.state.preSelectedTransactions.filter(id =>
+        payableTransactions.some(t => t._id === id)
+      );
+      if (validPreSelected.length > 0) {
+        setSelectedTransactions(validPreSelected);
+      }
+    } else {
+      setSelectedTransactions([]);
+    }
+  }, [transactions, location.state]);
 
   const fetchPaymentMethods = async () => {
     try {
@@ -94,8 +129,12 @@ const BulkSettlement = () => {
       };
 
       const result = await bulkPayTransactions(paymentData);
-      alert(`Payment successful! Receipt: ${result.receiptNumber}`);
-      navigate('/payments');
+      if (result && result.receiptNumber) {
+        alert(`Payment successful! Receipt: ${result.receiptNumber}`);
+      } else {
+        alert('Payment processed successfully!');
+      }
+      navigate('/admin/payments');
     } catch (error) {
       console.error('Payment error:', error);
       alert(error.response?.data?.message || 'Failed to process payment');
@@ -124,7 +163,7 @@ const BulkSettlement = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Bulk Settlement</h1>
           <button
-            onClick={() => navigate('/transactions')}
+            onClick={() => navigate('/admin/transactions')}
             className="text-gray-600 hover:text-gray-900"
           >
             ← Back to Transactions
@@ -287,7 +326,7 @@ const BulkSettlement = () => {
                 <div className="flex justify-end gap-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => navigate('/transactions')}
+                    onClick={() => navigate('/admin/transactions')}
                     className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                   >
                     Cancel

@@ -69,7 +69,7 @@ const Payments = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Payment Records</h1>
           <button
-            onClick={() => navigate('/bulk-settlement')}
+            onClick={() => navigate('/admin/bulk-settlement')}
             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
           >
             + New Bulk Payment
@@ -224,7 +224,7 @@ const Payments = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
-                          onClick={() => navigate(`/payments/${payment._id}`)}
+                          onClick={() => navigate(`/admin/payments/${payment._id}`)}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           View Details

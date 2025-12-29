@@ -123,7 +123,7 @@ const useTransactionStore = create((set, get) => ({
       set((state) => ({
         transactions: state.transactions.map(transaction => 
           paymentData.transactionIds.includes(transaction._id) 
-            ? { ...transaction, status: 'PAID', paymentId: response.data.data._id }
+            ? { ...transaction, status: 'DELIVERED' }
             : transaction
         ),
         loading: false

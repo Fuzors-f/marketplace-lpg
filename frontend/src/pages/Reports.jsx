@@ -30,8 +30,11 @@ const Reports = () => {
         api.get(`/reports/sales?${params}`)
       ]);
 
-      setBestSellers(bestSellersRes.data.data);
-      setSalesData(salesRes.data.data);
+      console.log('Best sellers response:', bestSellersRes.data);
+      console.log('Sales response:', salesRes.data);
+
+      setBestSellers(bestSellersRes.data.data || []);
+      setSalesData(salesRes.data.data || { salesByDate: [], totals: {} });
     } catch (error) {
       console.error('Failed to fetch reports:', error);
     } finally {

@@ -70,6 +70,13 @@ app.use('/api/public/catalog', publicCatalogRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/reports', reportRoutes);
 
+// Temporary direct route for testing
+app.get('/api/reports/direct-test', (req, res) => {
+  res.json({ success: true, message: 'Direct route works!' });
+});
+
+console.log('Reports routes registered at /api/reports');
+
 // Health check route
 app.get('/api/health', (req, res) => {
   res.status(200).json({

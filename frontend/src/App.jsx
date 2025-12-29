@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -29,6 +29,18 @@ import Orders from './pages/user/Orders';
 import NotFound from './pages/NotFound';
 import useAuthStore from './store/authStore';
 import useUserStore from './store/userStore';
+
+// Component to redirect transactions with ID
+const TransactionRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/admin/transactions/${id}`} replace />;
+};
+
+// Component to redirect payments with ID
+const PaymentRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/admin/payments/${id}`} replace />;
+};
 
 function App() {
   const initializeAuth = useAuthStore(state => state.initialize);
@@ -156,8 +168,10 @@ function App() {
         <Route path="/catalog" element={<Navigate to="/admin/catalog" replace />} />
         <Route path="/payment-methods" element={<Navigate to="/admin/payment-methods" replace />} />
         <Route path="/transactions" element={<Navigate to="/admin/transactions" replace />} />
+        <Route path="/transactions/:id" element={<TransactionRedirect />} />
         <Route path="/bulk-settlement" element={<Navigate to="/admin/bulk-settlement" replace />} />
         <Route path="/payments" element={<Navigate to="/admin/payments" replace />} />
+        <Route path="/payments/:id" element={<PaymentRedirect />} />
 
         {/* 404 Not Found - Must be last route */}
         <Route path="*" element={<NotFound />} />

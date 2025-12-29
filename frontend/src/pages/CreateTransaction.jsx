@@ -1,30 +1,80 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import useTransactionStore from '../store/transactionStore';
 import useItemStore from '../store/itemStore';
 import useStockStore from '../store/stockStore';
+import api from '../api/axios';
 
 const CreateTransaction = () => {
   const navigate = useNavigate();
-  const { createTransaction, users, fetchUsers, loading, error } = useTransactionStore();
+  const { id } = useParams();
+  const { 
+    createTransaction, 
+    updateTransaction,
+    fetchTransactionById,
+    currentTransaction,
+    users, 
+    fetchUsers, 
+    loading, 
+    error 
+  } = useTransactionStore();
   const { items, fetchItems } = useItemStore();
   const { summary, fetchStockSummary } = useStockStore();
 
+  const isEditMode = Boolean(id);
+
   const [formData, setFormData] = useState({
     userId: '',
-    status: 'UNPAID',
+    status: 'PENDING',
+    paymentMethodId: '',
     items: []
   });
 
   const [selectedItem, setSelectedItem] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
+  const [paymentMethods, setPaymentMethods] = useState([]);
 
   useEffect(() => {
     fetchUsers();
     fetchItems();
     fetchStockSummary();
-  }, []);
+    fetchPaymentMethods();
+    
+    // If edit mode, fetch transaction data
+    if (isEditMode && id) {
+      fetchTransactionById(id);
+    }
+  }, [id, isEditMode]);
+
+  const fetchPaymentMethods = async () => {
+    try {
+      const response = await api.get('/payment-methods');
+      if (response.data.success) {
+        setPaymentMethods(response.data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch payment methods:', error);
+    }
+  };
+
+  // Populate form data when editing
+  useEffect(() => {
+    if (isEditMode && currentTransaction) {
+      setFormData({
+        userId: currentTransaction.userId._id || currentTransaction.userId,
+        status: currentTransaction.status || 'PENDING',
+        paymentMethodId: currentTransaction.paymentMethodId?._id || currentTransaction.paymentMethodId || '',
+        items: currentTransaction.items.map(item => ({
+          itemId: item.itemId._id || item.itemId,
+          name: item.name,
+          size: item.size,
+          qty: item.qty || item.quantity,
+          price: item.price || item.priceAtPurchase
+        }))
+      });
+    }
+  }, [isEditMode, currentTransaction]);
 
   const getStock = (itemId) => {
     const stockInfo = summary.find(s => s.itemId === itemId);
@@ -129,21 +179,32 @@ const CreateTransaction = () => {
       return;
     }
 
+    if (!formData.paymentMethodId) {
+      alert('Please select a payment method');
+      return;
+    }
+
     try {
       const transactionData = {
         userId: formData.userId,
         status: formData.status,
+        paymentMethodId: formData.paymentMethodId,
         items: formData.items.map(item => ({
           itemId: item.itemId,
           qty: item.qty
         }))
       };
 
-      await createTransaction(transactionData);
-      alert('Transaction created successfully!');
-      navigate('/transactions');
+      if (isEditMode) {
+        await updateTransaction(id, transactionData);
+        alert('Transaction updated successfully!');
+      } else {
+        await createTransaction(transactionData);
+        alert('Transaction created successfully!');
+      }
+      navigate('/admin/transactions');
     } catch (error) {
-      console.error('Create transaction error:', error);
+      console.error('Transaction save error:', error);
       alert(error.response?.data?.message || 'Failed to create transaction');
     }
   };
@@ -160,9 +221,11 @@ const CreateTransaction = () => {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Create Transaction</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {isEditMode ? 'Edit Transaction' : 'Create Transaction'}
+          </h1>
           <button
-            onClick={() => navigate('/transactions')}
+            onClick={() => navigate('/admin/transactions')}
             className="text-gray-600 hover:text-gray-900"
           >
             ← Back to Transactions
@@ -212,7 +275,30 @@ const CreateTransaction = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="PENDING">Pending</option>
-                  <option value="UNPAID">Unpaid</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PROCESSING">Processing</option>
+                  <option value="SHIPPED">Shipped</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Method
+                </label>
+                <select
+                  value={formData.paymentMethodId}
+                  onChange={(e) => setFormData({ ...formData, paymentMethodId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Choose payment method...</option>
+                  {paymentMethods.map((method) => (
+                    <option key={method._id} value={method._id}>
+                      {method.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -336,7 +422,7 @@ const CreateTransaction = () => {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => navigate('/transactions')}
+              onClick={() => navigate('/admin/transactions')}
               className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
             >
               Cancel
@@ -346,7 +432,10 @@ const CreateTransaction = () => {
               disabled={loading}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400"
             >
-              {loading ? 'Creating...' : 'Create Transaction'}
+              {loading 
+                ? (isEditMode ? 'Updating...' : 'Creating...') 
+                : (isEditMode ? 'Update Transaction' : 'Create Transaction')
+              }
             </button>
           </div>
         </form>

@@ -308,12 +308,12 @@ export const getTransactionById = async (req, res) => {
   }
 };
 
-// @desc    Update order status
+// @desc    Update order status and items
 // @route   PUT /api/admin/transactions/:id
 // @access  Private (Admin only)
 export const updateTransaction = async (req, res) => {
   try {
-    const { status, notes } = req.body;
+    const { status, notes, items, userId, paymentMethodId } = req.body;
 
     // Find order
     const order = await Order.findById(req.params.id);
@@ -323,6 +323,87 @@ export const updateTransaction = async (req, res) => {
         success: false,
         message: 'Order not found'
       });
+    }
+
+    // If updating items, validate and restore original stock first
+    if (items && items.length > 0) {
+      // Restore original stock
+      for (const originalItem of order.items) {
+        await Stock.create({
+          itemId: originalItem.itemId,
+          quantity: originalItem.quantity,
+          type: 'IN',
+          note: `Order updated - restore: ${order._id}`
+        });
+      }
+
+      // Validate new items and calculate totals
+      let total = 0;
+      const processedItems = [];
+
+      for (const item of items) {
+        if (!item.itemId || !item.qty || item.qty < 1) {
+          return res.status(400).json({
+            success: false,
+            message: 'Each item must have itemId and qty (minimum 1)'
+          });
+        }
+
+        // Check if item exists
+        const itemData = await Item.findById(item.itemId);
+        if (!itemData) {
+          return res.status(404).json({
+            success: false,
+            message: `Item with ID ${item.itemId} not found`
+          });
+        }
+
+        // Check stock availability
+        const currentStock = await getCurrentStock(item.itemId);
+        if (currentStock < item.qty) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient stock for item ${itemData.name}. Available: ${currentStock}, Requested: ${item.qty}`
+          });
+        }
+
+        // Calculate subtotal
+        const price = itemData.price;
+        const subtotal = price * item.qty;
+
+        processedItems.push({
+          itemId: item.itemId,
+          name: itemData.name,
+          size: itemData.size,
+          quantity: item.qty,
+          priceAtPurchase: price
+        });
+
+        total += subtotal;
+      }
+
+      // Update order with new items
+      order.items = processedItems;
+      order.total = total;
+
+      // Reduce stock for new items
+      await reduceStock(processedItems, order._id);
+    }
+
+    // Update other fields
+    if (userId) {
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      order.userId = userId;
+    }
+
+    if (paymentMethodId) {
+      order.paymentMethodId = paymentMethodId;
     }
 
     // Update status if provided
@@ -337,8 +418,8 @@ export const updateTransaction = async (req, res) => {
         });
       }
 
-      // If cancelling, restore stock
-      if (normalizedStatus === 'cancelled' && order.status !== 'cancelled') {
+      // If cancelling, restore stock (if not already restored above)
+      if (normalizedStatus === 'cancelled' && order.status !== 'cancelled' && (!items || items.length === 0)) {
         for (const item of order.items) {
           await Stock.create({
             itemId: item.itemId,
@@ -448,12 +529,12 @@ export const deleteTransaction = async (req, res) => {
   }
 };
 
-// @desc    Bulk update order status (mark as delivered/paid)
+// @desc    Bulk update order status (mark as delivered/paid) and create payment record
 // @route   POST /api/admin/transactions/bulk-pay
 // @access  Private (Admin only)
 export const bulkPayTransactions = async (req, res) => {
   try {
-    const { orderIds, transactionIds, status = 'delivered' } = req.body;
+    const { orderIds, transactionIds, paymentMethodId, userId, status = 'delivered' } = req.body;
     
     // Support both orderIds and transactionIds for compatibility
     const ids = orderIds || transactionIds;
@@ -462,6 +543,13 @@ export const bulkPayTransactions = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide order IDs'
+      });
+    }
+
+    if (!paymentMethodId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide payment method'
       });
     }
 
@@ -475,16 +563,46 @@ export const bulkPayTransactions = async (req, res) => {
       });
     }
 
-    // Update all orders
+    // Find orders to be updated
+    const orders = await Order.find({ 
+      _id: { $in: ids }, 
+      status: { $nin: ['cancelled', 'delivered'] } 
+    }).populate('userId', 'name email');
+
+    if (orders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No eligible orders found for payment'
+      });
+    }
+
+    // Calculate total amount
+    const totalAmount = orders.reduce((sum, order) => sum + order.total, 0);
+
+    // Update all orders status
     const result = await Order.updateMany(
-      { _id: { $in: orderIds }, status: { $nin: ['cancelled', 'delivered'] } },
+      { _id: { $in: ids }, status: { $nin: ['cancelled', 'delivered'] } },
       { $set: { status: normalizedStatus, updatedAt: new Date() } }
     );
 
+    // Generate receipt number
+    const receiptNumber = `RCP-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
+    // Create payment record (using first order as template)
+    const paymentData = {
+      receiptNumber,
+      userId: userId || orders[0].userId._id,
+      orderIds: ids,
+      totalAmount,
+      paymentMethodId,
+      status: 'completed',
+      paidAt: new Date()
+    };
+
     res.status(200).json({
       success: true,
-      message: `${result.modifiedCount} orders updated to ${normalizedStatus}`,
-      data: { modifiedCount: result.modifiedCount }
+      message: `${result.modifiedCount} orders marked as paid`,
+      data: paymentData
     });
   } catch (error) {
     console.error('Bulk update error:', error);
@@ -508,8 +626,8 @@ export const getAllPayments = async (req, res) => {
       limit = 10
     } = req.query;
 
-    // Build query for delivered orders
-    const query = { status: 'delivered' };
+    // Build query for delivered orders (paid)
+    const query = { status: { $in: ['delivered', 'confirmed', 'processing', 'shipped'] } };
 
     if (userId) {
       query.userId = userId;
@@ -544,8 +662,11 @@ export const getAllPayments = async (req, res) => {
       receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
       userId: order.userId,
       orderId: order._id,
+      transactionIds: [order._id], // Single order as array for consistency
       totalAmount: order.total,
+      totalPaid: order.total, // Alias for frontend compatibility
       paymentMethodId: order.paymentMethodId,
+      status: order.status,
       paidAt: order.updatedAt,
       createdAt: order.createdAt
     }));
@@ -575,7 +696,10 @@ export const getAllPayments = async (req, res) => {
 // @access  Private (Admin only)
 export const getPaymentById = async (req, res) => {
   try {
-    const order = await Order.findOne({ _id: req.params.id, status: 'delivered' })
+    const order = await Order.findOne({ 
+      _id: req.params.id, 
+      status: { $in: ['delivered', 'confirmed', 'processing', 'shipped'] } 
+    })
       .populate('userId', 'name email phone address')
       .populate('items.itemId', 'name size')
       .populate('paymentMethodId', 'name type');
@@ -593,6 +717,7 @@ export const getPaymentById = async (req, res) => {
       receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
       userId: order.userId,
       orderId: order._id,
+      transactionIds: [order._id], // Single order as array for consistency
       items: order.items.map(item => ({
         itemId: item.itemId,
         name: item.name,
@@ -602,8 +727,10 @@ export const getPaymentById = async (req, res) => {
         subtotal: item.quantity * item.priceAtPurchase
       })),
       totalAmount: order.total,
+      totalPaid: order.total, // Alias for frontend compatibility
       paymentMethodId: order.paymentMethodId,
       shippingAddress: order.shippingAddress,
+      status: order.status,
       paidAt: order.updatedAt,
       createdAt: order.createdAt
     };

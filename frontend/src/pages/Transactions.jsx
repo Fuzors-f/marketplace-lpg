@@ -69,15 +69,51 @@ const Transactions = () => {
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
+      case 'DELIVERED':
+        return 'bg-green-100 text-green-800';
+      case 'SHIPPED':
+        return 'bg-blue-100 text-blue-800';
+      case 'PROCESSING':
+        return 'bg-purple-100 text-purple-800';
+      case 'CONFIRMED':
+        return 'bg-teal-100 text-teal-800';
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'CANCELLED':
+        return 'bg-gray-100 text-gray-800';
+      // Legacy support
       case 'PAID':
         return 'bg-green-100 text-green-800';
       case 'UNPAID':
         return 'bg-red-100 text-red-800';
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-blue-100 text-blue-800';
     }
+  };
+
+  const canMakePayment = (transaction) => {
+    // Can make payment if status is CONFIRMED, PROCESSING, or SHIPPED (not DELIVERED)
+    return ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(transaction.status);
+  };
+
+  const canEdit = (transaction) => {
+    // Can edit if status is PENDING or not DELIVERED/CANCELLED
+    return ['PENDING'].includes(transaction.status);
+  };
+
+  const canDelete = (transaction) => {
+    // Can delete if status is PENDING or CANCELLED
+    return ['PENDING', 'CANCELLED'].includes(transaction.status);
+  };
+
+  const handleMakePayment = (transaction) => {
+    // Navigate to bulk settlement with pre-selected transaction
+    navigate('/admin/bulk-settlement', { 
+      state: { 
+        preSelectedTransactions: [transaction._id],
+        preSelectedUserId: transaction.userId._id 
+      }
+    });
   };
 
   const formatDate = (dateString) => {
@@ -104,7 +140,7 @@ const Transactions = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
           <button
-            onClick={() => navigate('/transactions/create')}
+            onClick={() => navigate('/admin/transactions/create')}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
           >
             + Create Transaction
@@ -277,27 +313,42 @@ const Transactions = () => {
                         {formatDate(transaction.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        {/* View button - always visible */}
                         <button
-                          onClick={() => navigate(`/transactions/${transaction._id}`)}
+                          onClick={() => navigate(`/admin/transactions/${transaction._id}`)}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           View
                         </button>
-                        {transaction.status !== 'PAID' && (
-                          <>
-                            <button
-                              onClick={() => navigate(`/transactions/${transaction._id}/edit`)}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(transaction)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
-                          </>
+                        
+                        {/* Payment button - only for CONFIRMED, PROCESSING, SHIPPED */}
+                        {canMakePayment(transaction) && (
+                          <button
+                            onClick={() => handleMakePayment(transaction)}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Payment
+                          </button>
+                        )}
+                        
+                        {/* Edit button - only for PENDING */}
+                        {canEdit(transaction) && (
+                          <button
+                            onClick={() => navigate(`/admin/transactions/${transaction._id}/edit`)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        
+                        {/* Delete button - only for PENDING and CANCELLED */}
+                        {canDelete(transaction) && (
+                          <button
+                            onClick={() => handleDeleteClick(transaction)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
                         )}
                       </td>
                     </tr>

@@ -14,14 +14,25 @@ const TransactionDetail = () => {
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
+      case 'DELIVERED':
+        return 'bg-green-100 text-green-800';
+      case 'SHIPPED':
+        return 'bg-blue-100 text-blue-800';
+      case 'PROCESSING':
+        return 'bg-purple-100 text-purple-800';
+      case 'CONFIRMED':
+        return 'bg-teal-100 text-teal-800';
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'CANCELLED':
+        return 'bg-gray-100 text-gray-800';
+      // Legacy support
       case 'PAID':
         return 'bg-green-100 text-green-800';
       case 'UNPAID':
         return 'bg-red-100 text-red-800';
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-blue-100 text-blue-800';
     }
   };
 
@@ -40,6 +51,26 @@ const TransactionDetail = () => {
       style: 'currency',
       currency: 'IDR'
     }).format(amount);
+  };
+
+  const canMakePayment = (transaction) => {
+    // Can make payment if status is CONFIRMED, PROCESSING, or SHIPPED (not DELIVERED)
+    return ['CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(transaction.status);
+  };
+
+  const canEdit = (transaction) => {
+    // Can edit if status is PENDING
+    return ['PENDING'].includes(transaction.status);
+  };
+
+  const handleMakePayment = (transaction) => {
+    // Navigate to bulk settlement with pre-selected transaction
+    navigate('/admin/bulk-settlement', { 
+      state: { 
+        preSelectedTransactions: [transaction._id],
+        preSelectedUserId: transaction.userId._id 
+      }
+    });
   };
 
   if (loading) {
@@ -69,7 +100,7 @@ const TransactionDetail = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Transaction Detail</h1>
           <button
-            onClick={() => navigate('/transactions')}
+            onClick={() => navigate('/admin/transactions')}
             className="text-gray-600 hover:text-gray-900"
           >
             ← Back to Transactions
@@ -190,16 +221,39 @@ const TransactionDetail = () => {
             </div>
 
             {/* Actions */}
-            {currentTransaction.status !== 'PAID' && (
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  onClick={() => navigate(`/transactions/${currentTransaction._id}/edit`)}
-                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Edit Transaction
-                </button>
+            <div className="flex justify-between items-center pt-4 border-t">
+              {/* Payment Status & Link */}
+              <div>
+                {(currentTransaction.status === 'DELIVERED' || canMakePayment(currentTransaction)) ? (
+                  <button
+                    onClick={() => navigate('/admin/payments')}
+                    className="text-blue-600 hover:text-blue-900 text-sm"
+                  >
+                    → View Payment Records
+                  </button>
+                ) : null}
               </div>
-            )}
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                {canMakePayment(currentTransaction) && (
+                  <button
+                    onClick={() => handleMakePayment(currentTransaction)}
+                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                  >
+                    Make Payment
+                  </button>
+                )}
+                {canEdit(currentTransaction) && (
+                  <button
+                    onClick={() => navigate(`/admin/transactions/${currentTransaction._id}/edit`)}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Edit Transaction
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
