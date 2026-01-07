@@ -26,6 +26,7 @@ import Cart from './pages/user/Cart';
 import Checkout from './pages/user/Checkout';
 import Profile from './pages/user/Profile';
 import Orders from './pages/user/Orders';
+import TransactionHistory from './pages/user/TransactionHistory';
 import NotFound from './pages/NotFound';
 import useAuthStore from './store/authStore';
 import useUserStore from './store/userStore';
@@ -159,6 +160,7 @@ function App() {
         <Route path="/user/checkout" element={<Checkout />} />
         <Route path="/user/profile" element={<Profile />} />
         <Route path="/user/orders" element={<Orders />} />
+        <Route path="/user/transactions" element={<TransactionHistory />} />
 
         {/* Backward compatibility redirects */}
         <Route path="/login" element={<Navigate to="/admin" replace />} />

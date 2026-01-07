@@ -3,7 +3,8 @@ import {
   checkout,
   getOrders,
   getOrder,
-  cancelOrder
+  cancelOrder,
+  getUserTransactions
 } from '../controllers/checkoutController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -14,6 +15,7 @@ router.use(protect);
 
 router.post('/', checkout);
 router.get('/orders', getOrders);
+router.get('/transactions', getUserTransactions);
 router.get('/orders/:id', getOrder);
 router.put('/orders/:id/cancel', cancelOrder);
 

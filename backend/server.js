@@ -45,10 +45,20 @@ app.use(cors({
 // Handle preflight requests
 app.options('*', cors());
 
-// Rate limiting
+// Rate limiting - increased limits for better UX
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 200, // limit each IP to 200 requests per minute
+  message: {
+    success: false,
+    message: 'Too many requests, please try again after a minute'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for certain routes
+    return req.path === '/api/health';
+  }
 });
 app.use('/api/', limiter);
 

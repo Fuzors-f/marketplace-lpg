@@ -343,3 +343,51 @@ export const cancelOrder = async (req, res) => {
     });
   }
 };
+
+// @desc    Get user's transaction history (payments)
+// @route   GET /api/checkout/transactions
+// @access  Private (User)
+export const getUserTransactions = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    // Get user's completed transactions (delivered orders)
+    let query = { 
+      userId: req.user.id,
+      status: { $in: ['delivered', 'paid'] }
+    };
+
+    const transactions = await Order.find(query)
+      .populate('paymentMethodId', 'name accountNumber accountName')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const count = await Order.countDocuments(query);
+
+    // Format as transaction history
+    const formattedTransactions = transactions.map(order => ({
+      _id: order._id,
+      receiptNumber: order.invoiceNumber || `TXN-${order._id.toString().slice(-8).toUpperCase()}`,
+      paymentMethodId: order.paymentMethodId,
+      status: order.status,
+      totalPaid: order.total,
+      createdAt: order.updatedAt || order.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      data: formattedTransactions
+    });
+  } catch (error) {
+    console.error('Get user transactions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};

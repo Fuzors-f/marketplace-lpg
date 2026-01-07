@@ -220,9 +220,9 @@ const StockDetail = () => {
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Type</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Reason</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-600">Change</th>
                     <th className="px-4 py-3 text-right font-semibold text-gray-600">Stock Before</th>
                     <th className="px-4 py-3 text-right font-semibold text-gray-600">Stock After</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">Change</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Performed By</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Note</th>
                   </tr>
@@ -245,13 +245,13 @@ const StockDetail = () => {
                           {getReasonLabel(record.reason)}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-right text-gray-600">{record.previousStock}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-blue-600">{record.newStock}</td>
                       <td className="px-4 py-3 text-right font-semibold">
                         <span className={record.type === 'IN' ? 'text-green-600' : 'text-red-600'}>
                           {record.type === 'IN' ? '+' : '-'}{record.quantity}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-600">{record.previousStock}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-blue-600">{record.newStock}</td>
                       <td className="px-4 py-3">
                         <span className="text-gray-800">{record.performedBy?.name || 'System'}</span>
                         <span className="text-xs text-gray-500 ml-1">({record.performedBy?.userType || 'System'})</span>
