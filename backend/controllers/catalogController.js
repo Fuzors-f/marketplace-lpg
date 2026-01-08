@@ -6,6 +6,8 @@ import Item from '../models/Item.js';
 // @access  Public
 export const getCatalog = async (req, res) => {
   try {
+    const { page = 1, limit = 12 } = req.query;
+    
     const catalog = await Catalog.find({ isListed: true })
       .populate('itemId')
       .sort({ order: 1 });
@@ -15,10 +17,18 @@ export const getCatalog = async (req, res) => {
       cat.itemId && cat.itemId.status === 'active'
     );
 
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedCatalog = activeCatalog.slice(startIndex, endIndex);
+
     res.status(200).json({
       success: true,
-      count: activeCatalog.length,
-      data: activeCatalog
+      count: paginatedCatalog.length,
+      totalCount: activeCatalog.length,
+      totalPages: Math.ceil(activeCatalog.length / limit),
+      currentPage: parseInt(page),
+      data: paginatedCatalog
     });
   } catch (error) {
     console.error(error);
@@ -34,13 +44,21 @@ export const getCatalog = async (req, res) => {
 // @access  Private
 export const getAdminCatalog = async (req, res) => {
   try {
+    const { page = 1, limit = 12 } = req.query;
+    
+    const totalCount = await Catalog.countDocuments();
     const catalog = await Catalog.find()
       .populate('itemId')
-      .sort({ order: 1 });
+      .sort({ order: 1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
 
     res.status(200).json({
       success: true,
       count: catalog.length,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: parseInt(page),
       data: catalog
     });
   } catch (error) {

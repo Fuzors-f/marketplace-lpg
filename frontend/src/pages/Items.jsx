@@ -4,7 +4,7 @@ import useItemStore from '../store/itemStore';
 import useStockStore from '../store/stockStore';
 
 const Items = () => {
-  const { items, fetchItems, createItem, updateItem, deleteItem, loading } = useItemStore();
+  const { items, totalPages, currentPage, fetchItems, createItem, updateItem, deleteItem, loading } = useItemStore();
   const { summary, fetchStockSummary } = useStockStore();
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -16,11 +16,15 @@ const Items = () => {
     image: '',
     status: 'active'
   });
+  
+  // Local pagination state
+  const [page, setPage] = useState(1);
+  const [itemsPerPage] = useState(12);
 
   useEffect(() => {
-    fetchItems();
+    fetchItems({ page, limit: itemsPerPage });
     fetchStockSummary();
-  }, []);
+  }, [page]);
 
   const getStock = (itemId) => {
     const stockInfo = summary.find(s => s.itemId === itemId);
@@ -70,12 +74,16 @@ const Items = () => {
     if (success) {
       handleCloseModal();
       fetchStockSummary();
+      if (!editingItem) {
+        setPage(1); // Reset to first page on create
+      }
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
       await deleteItem(id);
+      fetchStockSummary();
     }
   };
 
@@ -91,7 +99,7 @@ const Items = () => {
     <Layout>
       <div>
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Item Management</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Items</h1>
           <button
             onClick={() => handleOpenModal()}
             className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition"
@@ -159,6 +167,79 @@ const Items = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && items.length > 0 && (
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <p className="text-sm text-gray-600">
+              Showing page {page} of {totalPages} ({items.length} items on this page)
+            </p>
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, index) => {
+                    const pageNum = index + 1;
+                    if (
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      (pageNum >= page - 1 && pageNum <= page + 1)
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`px-4 py-2 rounded-lg border ${
+                            page === pageNum
+                              ? 'bg-green-500 text-white border-green-500'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    } else if (
+                      pageNum === page - 2 ||
+                      pageNum === page + 2
+                    ) {
+                      return <span key={pageNum} className="px-2">...</span>;
+                    }
+                    return null;
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={page === totalPages}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  »
+                </button>
+              </div>
+            )}
           </div>
         )}
 

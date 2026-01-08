@@ -8,19 +8,26 @@ const Catalog = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState('');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(8);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentPage]);
 
   const fetchData = async () => {
     try {
       const [catalogRes, itemsRes] = await Promise.all([
-        api.get('/catalog/admin'),
-        api.get('/items')
+        api.get('/catalog/admin', { params: { page: currentPage, limit: itemsPerPage } }),
+        api.get('/items', { params: { limit: 100 } }) // Get all items for dropdown
       ]);
 
+      console.log('Catalog response:', catalogRes.data); // Debug log
       setCatalog(catalogRes.data.data);
+      setTotalPages(catalogRes.data.totalPages || 1);
       setItems(itemsRes.data.data);
       setLoading(false);
     } catch (error) {
@@ -42,6 +49,7 @@ const Catalog = () => {
       if (response.data.success) {
         setShowModal(false);
         setSelectedItemId('');
+        setCurrentPage(1); // Reset to first page
         fetchData();
       }
     } catch (error) {
@@ -87,7 +95,7 @@ const Catalog = () => {
     <Layout>
       <div>
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Catalog Management</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Catalogs</h1>
           <button
             onClick={() => setShowModal(true)}
             className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition"
@@ -159,6 +167,79 @@ const Catalog = () => {
         {catalog.length === 0 && !loading && (
           <div className="text-center py-12 text-gray-500 bg-white rounded-lg">
             No items in catalog. Click "Add to Catalog" to get started.
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && catalog.length > 0 && (
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <p className="text-sm text-gray-600">
+              Showing page {currentPage} of {totalPages} ({catalog.length} items on this page)
+            </p>
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, index) => {
+                    const pageNum = index + 1;
+                    if (
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-4 py-2 rounded-lg border ${
+                            currentPage === pageNum
+                              ? 'bg-green-500 text-white border-green-500'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    } else if (
+                      pageNum === currentPage - 2 ||
+                      pageNum === currentPage + 2
+                    ) {
+                      return <span key={pageNum} className="px-2">...</span>;
+                    }
+                    return null;
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  »
+                </button>
+              </div>
+            )}
           </div>
         )}
 

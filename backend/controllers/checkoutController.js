@@ -195,6 +195,8 @@ export const checkout = async (req, res) => {
 export const getOrders = async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
 
     // Build query
     let query = { userId: req.user.id };
@@ -203,22 +205,23 @@ export const getOrders = async (req, res) => {
       query.status = status;
     }
 
+    // Get total count first
+    const count = await Order.countDocuments(query);
+    const totalPages = Math.ceil(count / limitNum);
+
     // Execute query with pagination
     const orders = await Order.find(query)
       .populate('items.itemId', 'name size price image')
       .populate('paymentMethodId', 'name accountNumber accountName')
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    // Get total count
-    const count = await Order.countDocuments(query);
+      .limit(limitNum)
+      .skip((pageNum - 1) * limitNum);
 
     res.status(200).json({
       success: true,
       count,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
+      totalPages,
+      currentPage: pageNum,
       data: orders
     });
   } catch (error) {

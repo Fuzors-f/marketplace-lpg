@@ -56,7 +56,7 @@ const Stock = () => {
     <Layout>
       <div>
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Stock Management</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Stocks</h1>
           <button
             onClick={handleOpenModal}
             className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition"

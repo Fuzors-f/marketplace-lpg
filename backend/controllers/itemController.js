@@ -5,11 +5,31 @@ import Item from '../models/Item.js';
 // @access  Private
 export const getItems = async (req, res) => {
   try {
-    const items = await Item.find().sort({ createdAt: -1 });
+    const { page = 1, limit = 12, search, status } = req.query;
+    
+    // Build query
+    let query = {};
+    
+    if (search) {
+      query.name = { $regex: search, $options: 'i' };
+    }
+    
+    if (status) {
+      query.status = status;
+    }
+    
+    const totalCount = await Item.countDocuments(query);
+    const items = await Item.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
 
     res.status(200).json({
       success: true,
       count: items.length,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: parseInt(page),
       data: items
     });
   } catch (error) {

@@ -1,16 +1,25 @@
 import { create } from 'zustand';
 import api from '../api/axios';
 
-const useItemStore = create((set) => ({
+const useItemStore = create((set, get) => ({
   items: [],
   loading: false,
   error: null,
+  totalPages: 1,
+  currentPage: 1,
+  totalCount: 0,
 
-  fetchItems: async () => {
+  fetchItems: async (params = {}) => {
     set({ loading: true, error: null });
     try {
-      const response = await api.get('/items');
-      set({ items: response.data.data, loading: false });
+      const response = await api.get('/items', { params });
+      set({ 
+        items: response.data.data, 
+        totalPages: response.data.totalPages || 1,
+        currentPage: response.data.currentPage || 1,
+        totalCount: response.data.totalCount || response.data.count,
+        loading: false 
+      });
     } catch (error) {
       set({ 
         error: error.response?.data?.message || 'Failed to fetch items', 
@@ -23,10 +32,9 @@ const useItemStore = create((set) => ({
     set({ loading: true, error: null });
     try {
       const response = await api.post('/items', itemData);
-      set((state) => ({ 
-        items: [response.data.data, ...state.items], 
-        loading: false 
-      }));
+      // Refetch to get updated pagination
+      const { currentPage } = get();
+      await get().fetchItems({ page: 1, limit: 12 });
       return true;
     } catch (error) {
       set({ 
@@ -61,10 +69,9 @@ const useItemStore = create((set) => ({
     set({ loading: true, error: null });
     try {
       await api.delete(`/items/${id}`);
-      set((state) => ({
-        items: state.items.filter(item => item._id !== id),
-        loading: false
-      }));
+      // Refetch to get updated pagination
+      const { currentPage } = get();
+      await get().fetchItems({ page: currentPage, limit: 12 });
       return true;
     } catch (error) {
       set({ 

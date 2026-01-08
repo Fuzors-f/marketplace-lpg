@@ -6,6 +6,7 @@ const Reports = () => {
   const [bestSellers, setBestSellers] = useState([]);
   const [salesData, setSalesData] = useState({ salesByDate: [], totals: {} });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: ''
@@ -18,6 +19,7 @@ const Reports = () => {
 
   const fetchReports = async () => {
     setLoading(true);
+    setError('');
     try {
       const params = new URLSearchParams();
       if (dateRange.startDate) params.append('startDate', dateRange.startDate);
@@ -35,8 +37,9 @@ const Reports = () => {
 
       setBestSellers(bestSellersRes.data.data || []);
       setSalesData(salesRes.data.data || { salesByDate: [], totals: {} });
-    } catch (error) {
-      console.error('Failed to fetch reports:', error);
+    } catch (err) {
+      console.error('Failed to fetch reports:', err);
+      setError('Failed to load reports. Please try again.');
     } finally {
       setLoading(false);
     }

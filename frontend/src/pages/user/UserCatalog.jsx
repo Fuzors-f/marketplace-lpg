@@ -20,14 +20,27 @@ function UserCatalog() {
   const [maxPrice, setMaxPrice] = useState('');
   const [inStockOnly, setInStockOnly] = useState(false);
   
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(12);
+  
   const [sizes, setSizes] = useState([]);
   const [priceRange, setPriceRange] = useState({ min: 0, max: 0 });
 
   useEffect(() => {
     fetchSizes();
     fetchPriceRange();
-    fetchItems();
+  }, []);
+
+  useEffect(() => {
+    // Reset ke halaman 1 ketika filter berubah
+    setCurrentPage(1);
   }, [search, sizeFilter, minPrice, maxPrice, inStockOnly]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [currentPage, search, sizeFilter, minPrice, maxPrice, inStockOnly]);
 
   const fetchSizes = async () => {
     try {
@@ -51,7 +64,10 @@ function UserCatalog() {
     try {
       setLoading(true);
       
-      const params = {};
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage
+      };
       if (search) params.search = search;
       if (sizeFilter) params.size = sizeFilter;
       if (minPrice) params.minPrice = minPrice;
@@ -60,6 +76,7 @@ function UserCatalog() {
       
       const response = await axios.get('/public/catalog', { params });
       setItems(response.data.data);
+      setTotalPages(response.data.totalPages || 1);
       setLoading(false);
     } catch (err) {
       setError('Failed to load items');
@@ -270,6 +287,7 @@ function UserCatalog() {
               setMinPrice('');
               setMaxPrice('');
               setInStockOnly(false);
+              setCurrentPage(1);
             }}
             className="mt-4 text-sm text-blue-600 hover:text-blue-700"
           >
@@ -288,49 +306,118 @@ function UserCatalog() {
             <p className="text-gray-600">No items found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {items.map((item) => (
-              <div key={item._id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="aspect-w-1 aspect-h-1 bg-gray-200">
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-48 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-48 flex items-center justify-center bg-gray-100">
-                      <span className="text-gray-400 text-4xl">📦</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg text-gray-900 mb-1">
-                    {item.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-2">{item.size}</p>
-                  <p className="text-xl font-bold text-blue-600 mb-2">
-                    {formatPrice(item.price)}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={`text-sm ${item.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {item.stock > 0 ? `Stock: ${item.stock}` : 'Out of Stock'}
-                    </span>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {items.map((item) => (
+                <div key={item._id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="aspect-w-1 aspect-h-1 bg-gray-200">
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-48 object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-48 flex items-center justify-center bg-gray-100">
+                        <span className="text-gray-400 text-4xl">📦</span>
+                      </div>
+                    )}
                   </div>
+                  
+                  <div className="p-4">
+                    <h3 className="font-semibold text-lg text-gray-900 mb-1">
+                      {item.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-2">{item.size}</p>
+                    <p className="text-xl font-bold text-blue-600 mb-2">
+                      {formatPrice(item.price)}
+                    </p>
+                    
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`text-sm ${item.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {item.stock > 0 ? `Stock: ${item.stock}` : 'Out of Stock'}
+                      </span>
+                    </div>
 
-                  <button
-                    onClick={() => handleAddToCart(item._id)}
-                    disabled={item.stock === 0}
-                    className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {item.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-                  </button>
+                    <button
+                      onClick={() => handleAddToCart(item._id)}
+                      disabled={item.stock === 0}
+                      className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {item.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                    </button>
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {[...Array(totalPages)].map((_, index) => {
+                    const pageNum = index + 1;
+                    // Show first, last, current, and adjacent pages
+                    if (
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-4 py-2 rounded-lg border ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    } else if (
+                      pageNum === currentPage - 2 ||
+                      pageNum === currentPage + 2
+                    ) {
+                      return <span key={pageNum} className="px-2">...</span>;
+                    }
+                    return null;
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  »
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
