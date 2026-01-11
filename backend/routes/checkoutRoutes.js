@@ -4,7 +4,9 @@ import {
   getOrders,
   getOrder,
   cancelOrder,
-  getUserTransactions
+  getUserTransactions,
+  getUserPayments,
+  getUserPaymentById
 } from '../controllers/checkoutController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -16,6 +18,8 @@ router.use(protect);
 router.post('/', checkout);
 router.get('/orders', getOrders);
 router.get('/transactions', getUserTransactions);
+router.get('/payments', getUserPayments);
+router.get('/payments/:id', getUserPaymentById);
 router.get('/orders/:id', getOrder);
 router.put('/orders/:id/cancel', cancelOrder);
 

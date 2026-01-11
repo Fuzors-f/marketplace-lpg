@@ -63,7 +63,11 @@ const Payments = () => {
   const handleApplyFilters = () => { fetchPayments(filters); setCurrentPage(1); };
   const handleClearFilters = () => { setFilters({ userId: '', startDate: '', endDate: '' }); setSearchTerm(''); fetchPayments(); setCurrentPage(1); };
   const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const formatCurrency = (a) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(a);
+  const formatCurrency = (a) => {
+    const numAmount = Number(a);
+    if (isNaN(numAmount)) return 'Rp 0';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(numAmount);
+  };
 
   const getPageNumbers = () => {
     const pages = [];
@@ -141,21 +145,17 @@ const Payments = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transactions</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('totalPaid')}>Total{getSortIcon('totalPaid')}</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onClick={() => handleSort('createdAt')}>Date{getSortIcon('createdAt')}</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {paginatedData.map(p => (
-                    <tr key={p._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm font-medium">{p.receiptNumber}</td>
+                    <tr key={p._id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/payments/${p._id}`)}>
+                      <td className="px-6 py-4 text-sm font-medium text-blue-600">{p.receiptNumber || p._id?.slice(-8).toUpperCase()}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{p.userId?.name || 'N/A'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{p.paymentMethodId?.name || 'N/A'}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{p.transactionIds?.length || 0} transaction(s)</td>
-                      <td className="px-6 py-4 text-sm font-medium">{formatCurrency(p.totalPaid)}</td>
+                      <td className="px-6 py-4 text-sm font-medium">{formatCurrency(p.totalPaid || p.totalAmount || 0)}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{formatDate(p.createdAt)}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <button onClick={() => navigate(`/admin/payments/${p._id}`)} className="text-blue-600 hover:text-blue-900">View Details</button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

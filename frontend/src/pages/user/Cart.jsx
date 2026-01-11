@@ -117,6 +117,12 @@ function Cart() {
                 Orders
               </button>
               <button
+                onClick={() => navigate('/user/payments')}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Payments
+              </button>
+              <button
                 onClick={() => navigate('/user/profile')}
                 className="text-gray-600 hover:text-gray-900"
               >

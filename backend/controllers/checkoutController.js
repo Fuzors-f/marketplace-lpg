@@ -4,6 +4,8 @@ import Item from '../models/Item.js';
 import Stock from '../models/Stock.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 import StockHistory from '../models/StockHistory.js';
+import Payment from '../models/Payment.js';
+import Transaction from '../models/Transaction.js';
 
 // Helper function to calculate current stock for an item
 const calculateCurrentStock = async (itemId) => {
@@ -388,6 +390,156 @@ export const getUserTransactions = async (req, res) => {
     });
   } catch (error) {
     console.error('Get user transactions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get user's payments list
+// @route   GET /api/checkout/payments
+// @access  Private (User)
+export const getUserPayments = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const { status, startDate, endDate } = req.query;
+
+    // Build query - only show orders (payments) belonging to current user
+    // Only show confirmed/paid orders
+    let query = { 
+      userId: req.user.id,
+      status: { $in: ['delivered', 'confirmed', 'processing', 'shipped', 'paid'] }
+    };
+
+    // Filter by status if provided
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        query.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    // Get orders (payments) with populated data
+    const orders = await Order.find(query)
+      .populate('paymentMethodId', 'name accountNumber accountName type')
+      .populate('items.itemId', 'name price unit')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip((page - 1) * limit);
+
+    const count = await Order.countDocuments(query);
+
+    // Format as payments
+    const formattedPayments = orders.map(order => {
+      const items = order.items?.map(item => ({
+        _id: item._id,
+        itemName: item.itemId?.name || item.name || 'Item tidak ditemukan',
+        quantity: item.quantity || 0,
+        price: item.priceAtPurchase || item.itemId?.price || 0,
+        unit: item.itemId?.unit || 'unit',
+        total: (item.quantity || 0) * (item.priceAtPurchase || 0)
+      })) || [];
+
+      return {
+        _id: order._id,
+        receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
+        paymentMethod: order.paymentMethodId,
+        totalPaid: order.total || 0,
+        items: items,
+        itemCount: items.length,
+        status: order.status,
+        createdAt: order.createdAt
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      data: formattedPayments
+    });
+  } catch (error) {
+    console.error('Get user payments error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @desc    Get user's single payment detail
+// @route   GET /api/checkout/payments/:id
+// @access  Private (User)
+export const getUserPaymentById = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('userId', 'name email phone address')
+      .populate('paymentMethodId', 'name accountNumber accountName type')
+      .populate('items.itemId', 'name price unit');
+
+    console.log('Order found:', order?._id);
+    console.log('PaymentMethodId populated:', order?.paymentMethodId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
+      });
+    }
+
+    // Verify that this order belongs to the current user
+    if (order.userId._id.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this payment'
+      });
+    }
+
+    // Format items from order
+    const items = order.items?.map(item => ({
+      _id: item._id,
+      itemId: item.itemId,
+      name: item.itemId?.name || item.name || 'Item tidak ditemukan',
+      size: item.itemId?.size || item.size || '',
+      qty: item.quantity,
+      quantity: item.quantity,
+      price: item.priceAtPurchase,
+      priceAtPurchase: item.priceAtPurchase,
+      subtotal: item.quantity * item.priceAtPurchase
+    })) || [];
+
+    const formattedPayment = {
+      _id: order._id,
+      receiptNumber: `RCP-${order._id.toString().slice(-8).toUpperCase()}`,
+      user: order.userId,
+      paymentMethod: order.paymentMethodId,
+      totalPaid: order.total || 0,
+      items: items,
+      itemCount: items.length,
+      status: order.status,
+      shippingAddress: order.shippingAddress,
+      createdAt: order.createdAt
+    };
+
+    res.status(200).json({
+      success: true,
+      data: formattedPayment
+    });
+  } catch (error) {
+    console.error('Get user payment by id error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

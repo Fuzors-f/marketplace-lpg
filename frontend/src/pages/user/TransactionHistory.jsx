@@ -104,6 +104,7 @@ function TransactionHistory() {
             
             <div className="flex items-center gap-4">
               <button onClick={() => navigate('/user/orders')} className="text-gray-600 hover:text-gray-900">Orders</button>
+              <button onClick={() => navigate('/user/payments')} className="text-gray-600 hover:text-gray-900">Payments</button>
               <button onClick={() => navigate('/user/cart')} className="text-gray-600 hover:text-gray-900">Cart</button>
               <button onClick={() => navigate('/user/profile')} className="text-gray-600 hover:text-gray-900">Profile</button>
               <button

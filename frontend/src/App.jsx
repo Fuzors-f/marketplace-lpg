@@ -27,6 +27,8 @@ import Checkout from './pages/user/Checkout';
 import Profile from './pages/user/Profile';
 import Orders from './pages/user/Orders';
 import TransactionHistory from './pages/user/TransactionHistory';
+import UserPayments from './pages/user/UserPayments';
+import UserPaymentDetail from './pages/user/UserPaymentDetail';
 import NotFound from './pages/NotFound';
 import useAuthStore from './store/authStore';
 import useUserStore from './store/userStore';
@@ -161,6 +163,8 @@ function App() {
         <Route path="/user/profile" element={<Profile />} />
         <Route path="/user/orders" element={<Orders />} />
         <Route path="/user/transactions" element={<TransactionHistory />} />
+        <Route path="/user/payments" element={<UserPayments />} />
+        <Route path="/user/payments/:id" element={<UserPaymentDetail />} />
 
         {/* Backward compatibility redirects */}
         <Route path="/login" element={<Navigate to="/admin" replace />} />

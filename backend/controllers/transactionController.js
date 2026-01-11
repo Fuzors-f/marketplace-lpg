@@ -701,11 +701,11 @@ export const getPaymentById = async (req, res) => {
   try {
     const order = await Order.findOne({ 
       _id: req.params.id, 
-      status: { $in: ['delivered', 'confirmed', 'processing', 'shipped'] } 
+      status: { $in: ['delivered', 'confirmed', 'processing', 'shipped', 'pending', 'paid'] } 
     })
       .populate('userId', 'name email phone address')
-      .populate('items.itemId', 'name size')
-      .populate('paymentMethodId', 'name type');
+      .populate('items.itemId', 'name size price')
+      .populate('paymentMethodId', 'name type accountNumber accountName');
 
     if (!order) {
       return res.status(404).json({
@@ -714,6 +714,10 @@ export const getPaymentById = async (req, res) => {
       });
     }
 
+    // Debug log
+    console.log('Order found:', order._id);
+    console.log('Order items:', JSON.stringify(order.items, null, 2));
+
     // Transform to payment format
     const payment = {
       _id: order._id,
@@ -721,14 +725,24 @@ export const getPaymentById = async (req, res) => {
       userId: order.userId,
       orderId: order._id,
       transactionIds: [order._id], // Single order as array for consistency
-      items: order.items.map(item => ({
-        itemId: item.itemId,
-        name: item.name,
-        size: item.size,
-        qty: item.quantity,
-        price: item.priceAtPurchase,
-        subtotal: item.quantity * item.priceAtPurchase
-      })),
+      items: order.items.map(item => {
+        // Get name from populated itemId or from stored name
+        const itemName = item.itemId?.name || item.name || 'Item tidak ditemukan';
+        const itemSize = item.itemId?.size || item.size || '';
+        const itemPrice = item.priceAtPurchase || item.itemId?.price || 0;
+        
+        return {
+          _id: item._id,
+          itemId: item.itemId,
+          name: itemName,
+          size: itemSize,
+          qty: item.quantity,
+          quantity: item.quantity,
+          price: itemPrice,
+          priceAtPurchase: itemPrice,
+          subtotal: item.quantity * itemPrice
+        };
+      }),
       totalAmount: order.total,
       totalPaid: order.total, // Alias for frontend compatibility
       paymentMethodId: order.paymentMethodId,
@@ -737,6 +751,9 @@ export const getPaymentById = async (req, res) => {
       paidAt: order.updatedAt,
       createdAt: order.createdAt
     };
+
+    // Debug log
+    console.log('Payment items:', JSON.stringify(payment.items, null, 2));
 
     res.status(200).json({
       success: true,

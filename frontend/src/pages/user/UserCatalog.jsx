@@ -156,6 +156,12 @@ function UserCatalog() {
                     Orders
                   </button>
                   <button
+                    onClick={() => navigate('/user/payments')}
+                    className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                  >
+                    Payments
+                  </button>
+                  <button
                     onClick={() => navigate('/user/profile')}
                     className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
                   >
