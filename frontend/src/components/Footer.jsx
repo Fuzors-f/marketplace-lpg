@@ -7,11 +7,22 @@ function Footer() {
 
   useEffect(() => {
     fetchSettings();
+    
+    // Refetch settings every 30 seconds to get latest updates
+    const interval = setInterval(fetchSettings, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSettings = async () => {
     try {
-      const response = await axios.get('/settings');
+      // Add cache-busting query parameter and headers
+      const response = await axios.get('/settings', {
+        headers: { 
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        params: { t: new Date().getTime() } // Timestamp to prevent caching
+      });
       if (response.data.success) {
         setSettings(response.data.data);
       }
@@ -22,9 +33,12 @@ function Footer() {
       setSettings({
         companyName: 'PT. Unggul Migas Sejati',
         address: 'Jl. Karang Bayan, Sigerongan, Kec. Lingsar, Kabupaten Lombok Barat, Nusa Tenggara Bar. 83237',
-        contactPerson: 'Budi Pekerti',
-        phone: '+628117584566',
-        email: 'budi@gmail.com'
+        locationInfo: 'Jl. Karang Bayan, Sigerongan, Kec. Lingsar, Kabupaten Lombok Barat, Nusa Tenggara Bar. 83237',
+        contactPersons: [
+          { name: 'Heru Atmojo', email: 'atmojohero69@gmail.com', phone: '+628123522860' },
+          { name: 'Mawardi', email: 'mawardi2455@gmail.com', phone: '+6281237332540' },
+          { name: 'Diah', email: 'diahkurniyaty3@gmail.com', phone: '+6287730221343' }
+        ]
       });
       setLoading(false);
     }
@@ -76,7 +90,7 @@ function Footer() {
               <p className="text-lg font-semibold text-gray-700">Alamat</p>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed">
-              {settings.location || settings.address}
+              {settings.locationInfo || settings.address}
             </p>
           </div>
         </div>
@@ -91,26 +105,14 @@ function Footer() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {/* Contact 1 - Heru Atmojo */}
-            <div className="text-center">
-              <p className="font-semibold text-gray-900 mb-1">Heru Atmojo</p>
-              <p className="text-sm text-gray-600 mb-1">atmojohero69@gmail.com</p>
-              <p className="text-sm text-gray-600">+628123522860</p>
-            </div>
-            
-            {/* Contact 2 - Mawardi */}
-            <div className="text-center">
-              <p className="font-semibold text-gray-900 mb-1">Mawardi</p>
-              <p className="text-sm text-gray-600 mb-1">mawardi2455@gmail.com</p>
-              <p className="text-sm text-gray-600">+6281237332540</p>
-            </div>
-            
-            {/* Contact 3 - Diah */}
-            <div className="text-center">
-              <p className="font-semibold text-gray-900 mb-1">Diah</p>
-              <p className="text-sm text-gray-600 mb-1">diahkurniyaty3@gmail.com</p>
-              <p className="text-sm text-gray-600">+6287730221343</p>
-            </div>
+            {/* Dynamically render contact persons from API */}
+            {settings.contactPersons && settings.contactPersons.map((contact, index) => (
+              <div key={index} className="text-center">
+                <p className="font-semibold text-gray-900 mb-1">{contact.name}</p>
+                <p className="text-sm text-gray-600 mb-1">{contact.email}</p>
+                <p className="text-sm text-gray-600">{contact.phone}</p>
+              </div>
+            ))}
           </div>
         </div>
 

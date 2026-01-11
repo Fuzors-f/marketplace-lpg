@@ -74,7 +74,7 @@ function UserCatalog() {
       if (maxPrice) params.maxPrice = maxPrice;
       if (inStockOnly) params.inStock = 'true';
       
-      const response = await axios.get('/public/catalog', { params });
+      const response = await axios.get('/public/catalog', { params, isListed: true });
       setItems(response.data.data);
       setTotalPages(response.data.totalPages || 1);
       setLoading(false);

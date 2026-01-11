@@ -187,7 +187,7 @@ const CreateTransaction = () => {
     try {
       const transactionData = {
         userId: formData.userId,
-        status: formData.status,
+        status: formData.status || "PENDING",
         paymentMethodId: formData.paymentMethodId,
         items: formData.items.map(item => ({
           itemId: item.itemId,

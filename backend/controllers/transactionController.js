@@ -39,6 +39,9 @@ export const createTransaction = async (req, res) => {
   try {
     const { userId, items, status = 'pending', paymentMethodId, shippingAddress, notes } = req.body;
 
+    // Normalize status to lowercase
+    const normalizedStatus = status.toLowerCase();
+
     // Validation
     if (!userId || !items || items.length === 0) {
       return res.status(400).json({
@@ -114,7 +117,7 @@ export const createTransaction = async (req, res) => {
       items: processedItems,
       paymentMethodId,
       total,
-      status,
+      status: normalizedStatus,
       shippingAddress: shippingAddress || user.address || 'Not specified',
       notes: notes || ''
     });

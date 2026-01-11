@@ -242,7 +242,7 @@ const Transactions = () => {
                     <tr key={t._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm font-medium">{t.invoiceNumber}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{t.userId?.name || 'N/A'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-500">{t.items?.length || 0} item(s)</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{(t.items?.reduce((sum, item) => sum + (item.qty || 0), 0)) || 0} items ({t.items?.length || 0} kind{t.items?.length !== 1 ? 's' : ''})</td>
                       <td className="px-6 py-4 text-sm font-medium">{formatCurrency(t.totalAmount)}</td>
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(t.status)}`}>{t.status}</span></td>
                       <td className="px-6 py-4 text-sm text-gray-500">{formatDate(t.createdAt)}</td>

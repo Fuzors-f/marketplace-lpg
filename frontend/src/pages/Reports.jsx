@@ -70,7 +70,12 @@ const Reports = () => {
 
   // Calculate max values for chart scaling
   const maxQuantity = Math.max(...bestSellers.map(item => item.totalQuantitySold), 1);
-  const maxSales = Math.max(...salesData.salesByDate.map(item => item.totalSales), 1);
+  const maxSales = Math.max(
+    ...(salesData.salesByDate && salesData.salesByDate.length > 0 
+      ? salesData.salesByDate.map(item => item.totalSales) 
+      : [1]), 
+    1
+  );
 
   if (loading) {
     return (
@@ -244,22 +249,26 @@ const Reports = () => {
             <div>
               {/* Simple Bar Chart for Sales Trend */}
               <div className="h-64 flex items-end gap-2 mb-4 border-b border-l border-gray-300 pt-4 pl-4">
-                {salesData.salesByDate.slice(-14).map((item, index) => (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div
-                      className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t transition-all duration-300 hover:from-blue-600 hover:to-blue-400 cursor-pointer relative group"
-                      style={{ height: `${(item.totalSales / maxSales) * 100}%`, minHeight: '4px' }}
-                      title={`${item.date}: ${formatCurrency(item.totalSales)}`}
-                    >
-                      <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
-                        {formatCurrency(item.totalSales)}
+                {salesData.salesByDate.slice(-14).map((item, index) => {
+                  const heightPercent = maxSales > 0 ? (item.totalSales / maxSales) * 100 : 50;
+                  const finalHeight = Math.max(heightPercent, 8);
+                  return (
+                    <div key={index} className="flex-1 flex flex-col-reverse items-center h-full">
+                      <span className="text-xs text-gray-500 mt-1 transform -rotate-45 origin-top-left">
+                        {item.date.slice(-5)}
+                      </span>
+                      <div
+                        className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t transition-all duration-300 hover:from-blue-600 hover:to-blue-400 cursor-pointer relative group"
+                        style={{ height: `${finalHeight}%` }}
+                        title={`${item.date}: ${formatCurrency(item.totalSales)}`}
+                      >
+                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
+                          {formatCurrency(item.totalSales)}
+                        </div>
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500 mt-1 transform -rotate-45 origin-top-left">
-                      {item.date.slice(-5)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Sales Data Table */}

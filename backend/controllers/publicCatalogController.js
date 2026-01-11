@@ -9,8 +9,20 @@ export const getPublicCatalog = async (req, res) => {
   try {
     const { search, minPrice, maxPrice, size, inStock, page = 1, limit = 12 } = req.query;
 
-    // Build query
-    let query = {};
+    // First, get all listed items from catalog
+    const listedItems = await Catalog.find({ isListed: true })
+      .populate('itemId')
+      .select('itemId');
+
+    // Extract item IDs that are listed
+    const listedItemIds = listedItems
+      .filter(cat => cat.itemId && cat.itemId.status === 'active')
+      .map(cat => cat.itemId._id);
+
+    // Build query to only include items from the catalog
+    let query = {
+      _id: { $in: listedItemIds }
+    };
 
     // Search by name
     if (search) {
@@ -99,9 +111,22 @@ export const getPublicCatalog = async (req, res) => {
 // @access  Public
 export const getPublicItem = async (req, res) => {
   try {
+    // Check if item is listed in catalog
+    const catalogEntry = await Catalog.findOne({ 
+      itemId: req.params.id,
+      isListed: true
+    });
+
+    if (!catalogEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Item not found or is not available'
+      });
+    }
+
     const item = await Item.findById(req.params.id);
 
-    if (!item) {
+    if (!item || item.status !== 'active') {
       return res.status(404).json({
         success: false,
         message: 'Item not found'

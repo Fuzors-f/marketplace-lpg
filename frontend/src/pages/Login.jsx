@@ -97,21 +97,7 @@ const Login = () => {
           >
             {loading ? 'Loading...' : 'LOGIN'}
           </button>
-
-          <div className="text-center">
-            <a href="#" className="text-green-600 hover:underline text-sm">
-              Forgot password? Click here
-            </a>
-          </div>
         </form>
-
-        <div className="mt-8 text-center text-sm text-gray-500">
-          <p>Belum punya akun?</p>
-          <a href="#" className="text-green-600 hover:underline font-semibold">
-            Registrasi
-          </a>
-        </div>
-
         {/* Back to Home Button */}
         <div className="mt-4 text-center">
           <Link 

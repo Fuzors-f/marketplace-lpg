@@ -53,10 +53,9 @@ const BulkSettlement = () => {
   }, [selectedUserId, paymentMethods]);
 
   useEffect(() => {
-    // Filter transactions that can be paid (UNPAID or delivered status orders)
+    // Filter transactions that are PENDING
     const payableTransactions = transactions.filter(t => 
-      t.status === 'UNPAID' || t.status === 'PENDING' ||
-      ['DELIVERED', 'CONFIRMED', 'PROCESSING', 'SHIPPED'].includes(t.status)
+      t.status === 'PENDING'
     );
     setUnpaidTransactions(payableTransactions);
     
@@ -156,6 +155,20 @@ const BulkSettlement = () => {
     }).format(amount);
   };
 
+  const getStatusBadgeClass = (status) => {
+    const classes = {
+      'DELIVERED': 'bg-green-100 text-green-800',
+      'SHIPPED': 'bg-blue-100 text-blue-800',
+      'PROCESSING': 'bg-purple-100 text-purple-800',
+      'CONFIRMED': 'bg-teal-100 text-teal-800',
+      'PENDING': 'bg-yellow-100 text-yellow-800',
+      'CANCELLED': 'bg-gray-100 text-gray-800',
+      'PAID': 'bg-green-100 text-green-800',
+      'UNPAID': 'bg-red-100 text-red-800'
+    };
+    return classes[status] || 'bg-blue-100 text-blue-800';
+  };
+
   return (
     <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -223,7 +236,7 @@ const BulkSettlement = () => {
                 </div>
               ) : unpaidTransactions.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  No unpaid transactions found for this user
+                  No pending transactions found for this user
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -243,6 +256,9 @@ const BulkSettlement = () => {
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Items
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Amount
@@ -270,7 +286,12 @@ const BulkSettlement = () => {
                             {transaction.invoiceNumber}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">
-                            {transaction.items?.length || 0} item(s)
+                            {(transaction.items?.reduce((sum, item) => sum + (item.qty || 0), 0)) || 0} items ({transaction.items?.length || 0} kind{transaction.items?.length !== 1 ? 's' : ''})
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(transaction.status)}`}>
+                              {transaction.status}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900 font-medium">
                             {formatCurrency(transaction.totalAmount)}

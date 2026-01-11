@@ -172,12 +172,20 @@ export const getSalesReport = async (req, res) => {
 
     console.log('Date format:', dateFormat);
 
+    // Get user's timezone offset in minutes
+    const timezoneOffset = new Date().getTimezoneOffset();
+
     // Simple aggregation first - just get basic data
     const salesData = await Order.aggregate([
       { $match: dateFilter },
       {
         $group: {
-          _id: dateFormat,
+          _id: {
+            $dateToString: { 
+              format: dateFormat.$dateToString.format, 
+              date: { $subtract: ['$createdAt', timezoneOffset * 60 * 1000] }
+            }
+          },
           totalSales: { $sum: '$total' },
           transactionCount: { $sum: 1 }
         }
@@ -190,12 +198,19 @@ export const getSalesReport = async (req, res) => {
     // Add itemsSold calculation separately if needed
     const salesWithItems = await Promise.all(
       salesData.map(async (sale) => {
+        const startOfDay = new Date(sale._id + 'T00:00:00.000Z');
+        const endOfDay = new Date(sale._id + 'T23:59:59.999Z');
+        
+        // Adjust back to UTC
+        startOfDay.setMinutes(startOfDay.getMinutes() + timezoneOffset);
+        endOfDay.setMinutes(endOfDay.getMinutes() + timezoneOffset);
+        
         const orders = await Order.find({
           ...dateFilter,
           createdAt: {
             ...dateFilter.createdAt,
-            $gte: new Date(sale._id + 'T00:00:00.000Z'),
-            $lt: new Date(sale._id + 'T23:59:59.999Z')
+            $gte: startOfDay,
+            $lt: endOfDay
           }
         });
         

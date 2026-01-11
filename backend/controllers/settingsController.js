@@ -13,12 +13,31 @@ export const getSettings = async (req, res) => {
       settings = await Settings.create({
         companyName: 'PT. Unggul Migas Sejati',
         address: 'Jl. Karang Bayan, Sigerongan, Kec. Lingsar, Kabupaten Lombok Barat, Nusa Tenggara Bar. 83237',
-        contactPerson: 'Budi Pekerti',
-        phone: '+628117584566',
-        email: 'budi@gmail.com',
-        location: 'Jl. Karang Bayan, Sigerongan, Kec. Lingsar, Kabupaten Lombok Barat, Nusa Tenggara Bar. 83237'
+        locationInfo: 'Jl. Karang Bayan, Sigerongan, Kec. Lingsar, Kabupaten Lombok Barat, Nusa Tenggara Bar. 83237',
+        contactPersons: [
+          {
+            name: 'Heru Atmojo',
+            email: 'atmojohero69@gmail.com',
+            phone: '+628123522860'
+          },
+          {
+            name: 'Mawardi',
+            email: 'mawardi2455@gmail.com',
+            phone: '+6281237332540'
+          },
+          {
+            name: 'Diah',
+            email: 'diahkurniyaty3@gmail.com',
+            phone: '+6287730221343'
+          }
+        ]
       });
     }
+
+    // Set cache-busting headers to ensure fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.status(200).json({
       success: true,
@@ -38,23 +57,39 @@ export const getSettings = async (req, res) => {
 // @access  Private/Admin
 export const updateSettings = async (req, res) => {
   try {
-    const { companyName, address, contactPerson, phone, email, location, footerLogo } = req.body;
+    const { companyName, address, locationInfo, contactPersons, footerLogo } = req.body;
 
     // Validate required fields
-    if (!companyName || !address || !contactPerson || !phone) {
+    if (!companyName || !address) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide company name, address, contact person, and phone'
+        message: 'Please provide company name and address'
       });
     }
 
-    // Validate email format if provided
-    if (email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+    // Validate contact persons
+    if (!Array.isArray(contactPersons) || contactPersons.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least one contact person'
+      });
+    }
+
+    // Validate each contact person
+    for (const contact of contactPersons) {
+      if (!contact.name || !contact.email || !contact.phone) {
         return res.status(400).json({
           success: false,
-          message: 'Please provide a valid email address'
+          message: 'Each contact person must have name, email, and phone'
+        });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contact.email)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid email format for contact person: ${contact.name}`
         });
       }
     }
@@ -67,20 +102,16 @@ export const updateSettings = async (req, res) => {
       settings = await Settings.create({
         companyName,
         address,
-        contactPerson,
-        phone,
-        email: email || 'budi@gmail.com',
-        location: location || address,
+        locationInfo: locationInfo || address,
+        contactPersons,
         footerLogo: footerLogo || null
       });
     } else {
       // Update existing settings
       settings.companyName = companyName;
       settings.address = address;
-      settings.contactPerson = contactPerson;
-      settings.phone = phone;
-      settings.email = email || settings.email;
-      settings.location = location || address;
+      settings.locationInfo = locationInfo || address;
+      settings.contactPersons = contactPersons;
       if (footerLogo !== undefined) {
         settings.footerLogo = footerLogo;
       }
